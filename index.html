@@ -1,0 +1,404 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Dumbbell, Activity, TrendingUp, RotateCcw, Info, Calendar, ChevronDown } from 'lucide-react';
+
+// --- 1. 設定檔：8週線性週期模型 ---
+const CYCLE_PLAN = [
+    // Phase 1: 肌肥大/適應 (Volume)
+    { week: 1, label: "肌肥大適應期", sets: 4, reps: 10, intensity: 0.65, targetRPE: 6, desc: "基礎適應，動作控制" },
+    { week: 2, label: "肌肥大累積期", sets: 4, reps: 10, intensity: 0.70, targetRPE: 7, desc: "增加重量，維持次數" },
+    
+    // Phase 2: 力量轉化 (Strength Transition)
+    { week: 3, label: "力量轉化期 I", sets: 4, reps: 6, intensity: 0.75, targetRPE: 7, desc: "次數下降，強度提升" },
+    { week: 4, label: "力量轉化期 II", sets: 4, reps: 5, intensity: 0.80, targetRPE: 8, desc: "核心力量建構" },
+    { week: 5, label: "力量轉化期 III", sets: 3, reps: 5, intensity: 0.825, targetRPE: 8.5, desc: "高強度 5x5 變體" },
+
+    // Phase 3: 巔峰期 (Peaking)
+    { week: 6, label: "大重量適應期", sets: 3, reps: 3, intensity: 0.875, targetRPE: 8.5, desc: "神經系統適應大重量" },
+    { week: 7, label: "巔峰前哨戰", sets: 3, reps: 2, intensity: 0.925, targetRPE: 9, desc: "接近極限的訓練" },
+
+    // Phase 4: 減量 (Deload)
+    { week: 8, label: "減量 / 測驗週", sets: 3, reps: 3, intensity: 0.60, targetRPE: 5, desc: "恢復或測試新 1RM" }
+];
+
+const LIFTS = ['squat', 'bench', 'deadlift'];
+const LIFT_LABELS = { squat: '深蹲 (Squat)', bench: '臥推 (Bench)', deadlift: '硬舉 (Deadlift)' };
+const RPE_ADJUSTMENT_FACTOR = 0.03; // 3% per RPE point
+
+// --- 工具函數：四捨五入到最近的 2.5kg ---
+const roundToPlate = (weight) => {
+    return Math.round(weight / 2.5) * 2.5;
+};
+
+export default function App() {
+    // --- State Management ---
+    const [userStats, setUserStats] = useState({ squat: 100, bench: 80, deadlift: 140 });
+    // 新增頻率狀態
+    const [frequencies, setFrequencies] = useState({ squat: 1, bench: 1, deadlift: 1 });
+    const [activeTab, setActiveTab] = useState('squat');
+    const [rpeLogs, setRpeLogs] = useState({});
+    const [showInfo, setShowInfo] = useState(false);
+
+    // --- 初始化：從 LocalStorage 讀取 ---
+    useEffect(() => {
+        try {
+            const savedStats = localStorage.getItem('pl_stats');
+            const savedFreq = localStorage.getItem('pl_freq'); // 讀取頻率
+            const savedLogs = localStorage.getItem('pl_logs');
+            
+            if (savedStats) setUserStats(JSON.parse(savedStats));
+            if (savedFreq) setFrequencies(JSON.parse(savedFreq));
+            if (savedLogs) setRpeLogs(JSON.parse(savedLogs));
+        } catch (error) {
+            console.error("讀取紀錄失敗:", error);
+        }
+    }, []);
+
+    // --- 儲存：寫入 LocalStorage ---
+    useEffect(() => {
+        try {
+            localStorage.setItem('pl_stats', JSON.stringify(userStats));
+            localStorage.setItem('pl_freq', JSON.stringify(frequencies)); // 儲存頻率
+            localStorage.setItem('pl_logs', JSON.stringify(rpeLogs));
+        } catch (error) {
+            console.error("儲存紀錄失敗:", error);
+        }
+    }, [userStats, frequencies, rpeLogs]);
+
+    // --- 核心邏輯：動態計算課表 ---
+    const calculatePlan = (liftName) => {
+        let currentMax = userStats[liftName] || 0;
+        let planData = [];
+        const freq = frequencies[liftName] || 1;
+
+        CYCLE_PLAN.forEach((weekPlan) => {
+            // 1. 計算主訓練日 (Main Day) 數據
+            const rawWeight = currentMax * weekPlan.intensity;
+            const roundedWeight = roundToPlate(rawWeight);
+
+            // 2. 檢查 RPE 紀錄 (僅針對主訓練日)
+            const logKey = `${liftName}-${weekPlan.week}`;
+            const actualRPE = rpeLogs[logKey];
+
+            // 3. Autoregulation: 計算下週基準
+            let adjustedMax = currentMax;
+            let adjustmentReason = null;
+
+            if (actualRPE !== undefined && actualRPE !== "") {
+                const rpeDiff = weekPlan.targetRPE - parseFloat(actualRPE);
+                if (Math.abs(rpeDiff) >= 0.5) {
+                    const adjustmentPercent = rpeDiff * RPE_ADJUSTMENT_FACTOR;
+                    adjustedMax = currentMax * (1 + adjustmentPercent);
+                    adjustmentReason = rpeDiff > 0 
+                        ? `上週輕鬆 (RPE-${Math.abs(rpeDiff)})，強度上調 ${(adjustmentPercent*100).toFixed(1)}%`
+                        : `上週疲勞 (RPE+${Math.abs(rpeDiff)})，強度下修 ${(Math.abs(adjustmentPercent)*100).toFixed(1)}%`;
+                }
+            }
+
+            // 4. 生成該週的所有訓練日 (Sessions)
+            const weeklySessions = [];
+            
+            // Day 1: 主訓練
+            weeklySessions.push({
+                dayLabel: "Day 1 (主訓練)",
+                type: "Main",
+                sets: weekPlan.sets,
+                reps: weekPlan.reps,
+                weight: roundedWeight,
+                targetRPE: weekPlan.targetRPE,
+                actualRPE: actualRPE, // 用於輸入框
+                logKey: logKey, // 用於辨識輸入位置
+                desc: "重點：達成目標 RPE，這是進度指標。"
+            });
+
+            // Day 2+: 輔助訓練 (如果有設定頻率 > 1)
+            if (freq > 1) {
+                // 輔助日邏輯：重量為主日的 85%，組數少 1 組，次數相同 (技術鞏固)
+                // 或者在減量週保持更輕
+                const isDeload = weekPlan.label.includes("減量");
+                const backoffFactor = isDeload ? 0.8 : 0.85; // 減量週更輕
+                const backoffWeight = roundToPlate(roundedWeight * backoffFactor);
+                
+                weeklySessions.push({
+                    dayLabel: "Day 2 (輔助日)",
+                    type: "Accessory",
+                    sets: Math.max(2, weekPlan.sets - 1), // 至少2組
+                    reps: weekPlan.reps,
+                    weight: backoffWeight,
+                    targetRPE: Math.max(5, weekPlan.targetRPE - 1.5), // RPE 較低
+                    desc: "重點：完美技術與爆發力，不力竭。"
+                });
+            }
+
+            if (freq > 2) {
+                // Day 3: 更輕的恢復/速度日
+                 const speedWeight = roundToPlate(roundedWeight * 0.75);
+                 weeklySessions.push({
+                    dayLabel: "Day 3 (速度/技巧)",
+                    type: "Accessory",
+                    sets: 3,
+                    reps: Math.max(3, Math.round(weekPlan.reps / 2)), // 次數減半做爆發
+                    weight: speedWeight,
+                    targetRPE: 5,
+                    desc: "重點：專注槓鈴移動速度 (Bar Speed)。"
+                });
+            }
+
+            // 將該週數據推入總表
+            planData.push({
+                ...weekPlan,
+                sessions: weeklySessions,
+                nextMax: adjustedMax,
+                adjustmentReason: adjustmentReason
+            });
+
+            // 更新 currentMax
+            currentMax = adjustedMax;
+        });
+
+        return planData;
+    };
+
+    const handleStatChange = (e) => {
+        const val = parseFloat(e.target.value);
+        setUserStats({ ...userStats, [e.target.name]: isNaN(val) ? 0 : val });
+    };
+
+    const handleFreqChange = (lift, val) => {
+        setFrequencies({ ...frequencies, [lift]: parseInt(val) });
+    }
+
+    const handleRpeChange = (logKey, value) => {
+        setRpeLogs({ ...rpeLogs, [logKey]: value });
+    };
+
+    const resetData = () => {
+        if(window.confirm("確定要重置所有數據嗎？")) {
+            setUserStats({ squat: 100, bench: 80, deadlift: 140 });
+            setFrequencies({ squat: 1, bench: 1, deadlift: 1 });
+            setRpeLogs({});
+        }
+    };
+
+    const currentPlanData = useMemo(() => calculatePlan(activeTab), [activeTab, userStats, frequencies, rpeLogs]);
+
+    return (
+        <div className="min-h-screen bg-slate-900 text-slate-200 pb-12 font-sans">
+            {/* Header */}
+            <header className="bg-slate-800 border-b border-slate-700 p-6 sticky top-0 z-20 shadow-md">
+                <div className="max-w-4xl mx-auto flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-600 rounded-lg">
+                            <Activity className="text-white" size={24} />
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-bold text-white">AI 健力課表生成器</h1>
+                            <p className="text-xs text-slate-400">Linear Periodization with RPE Autoregulation</p>
+                        </div>
+                    </div>
+                    <button onClick={() => setShowInfo(!showInfo)} className="text-slate-400 hover:text-blue-400 transition">
+                        <Info size={24} />
+                    </button>
+                </div>
+            </header>
+
+            <main className="max-w-4xl mx-auto p-4 md:p-6 space-y-8">
+
+                {/* Info Box */}
+                {showInfo && (
+                    <div className="bg-blue-900/30 border border-blue-700/50 p-4 rounded-xl text-sm text-blue-200 space-y-2 animate-fade-in">
+                        <h3 className="font-bold flex items-center gap-2"><TrendingUp size={16}/> 多頻率訓練邏輯說明</h3>
+                        <ul className="list-disc list-inside space-y-1 ml-2 text-blue-100/80">
+                            <li><strong>Day 1 (主訓練)：</strong> 這是推動進度的關鍵日，請務必記錄 RPE。系統會根據此日的表現調整下週強度。</li>
+                            <li><strong>Day 2+ (輔助日)：</strong> 如果您設定每週訓練多次，系統會生成較輕的輔助日 (約主日重量的 85%)。這些日子專注於動作技術，<strong>不會影響</strong> AI 的強度計算。</li>
+                        </ul>
+                    </div>
+                )}
+
+                {/* Input Section */}
+                <section className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-semibold text-slate-200 flex items-center gap-2">
+                            <Dumbbell size={20} className="text-blue-400"/> 
+                            設定 1RM 與 訓練頻率
+                        </h2>
+                        <button onClick={resetData} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-900/20 transition">
+                            <RotateCcw size={12}/> 重置
+                        </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {LIFTS.map(lift => (
+                            <div key={lift} className="space-y-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-sm font-bold text-slate-300 uppercase tracking-wider">
+                                        {LIFT_LABELS[lift].split(' ')[0]}
+                                    </label>
+                                    <span className="text-xs text-slate-500 uppercase">{lift}</span>
+                                </div>
+                                
+                                {/* 1RM Input */}
+                                <div className="relative group">
+                                    <input
+                                        type="number"
+                                        name={lift}
+                                        value={userStats[lift]}
+                                        onChange={handleStatChange}
+                                        className="w-full bg-slate-900 text-white border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-lg font-bold"
+                                        placeholder="0"
+                                    />
+                                    <div className="absolute right-3 top-2.5 text-slate-500 text-xs font-medium">KG (1RM)</div>
+                                </div>
+
+                                {/* Frequency Selector */}
+                                <div className="flex items-center gap-2 bg-slate-900 rounded-lg px-3 py-2 border border-slate-600">
+                                    <Calendar size={14} className="text-blue-400"/>
+                                    <select 
+                                        value={frequencies[lift] || 1}
+                                        onChange={(e) => handleFreqChange(lift, e.target.value)}
+                                        className="bg-transparent text-sm text-slate-200 w-full outline-none cursor-pointer"
+                                    >
+                                        <option value="1">每週 1 練</option>
+                                        <option value="2">每週 2 練</option>
+                                        <option value="3">每週 3 練</option>
+                                    </select>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                {/* Plan Display Section */}
+                <section>
+                    {/* Tabs */}
+                    <div className="flex space-x-1 bg-slate-800 p-1 rounded-xl mb-6 overflow-x-auto">
+                        {LIFTS.map(lift => (
+                            <button
+                                key={lift}
+                                onClick={() => setActiveTab(lift)}
+                                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition whitespace-nowrap
+                                    ${activeTab === lift 
+                                        ? 'bg-blue-600 text-white shadow-lg' 
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                            >
+                                {LIFT_LABELS[lift]} 課表
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Schedule Cards */}
+                    <div className="space-y-6">
+                        {currentPlanData.map((weekData, index) => {
+                            // Determine status based on Main Session RPE input
+                            const mainSession = weekData.sessions[0];
+                            const hasInput = mainSession.actualRPE !== undefined && mainSession.actualRPE !== "";
+                            const isNext = !hasInput && (index === 0 || currentPlanData[index-1].sessions[0].actualRPE !== undefined);
+                            
+                            return (
+                                <div key={weekData.week} className="space-y-2 animate-slide-up">
+                                    {/* Week Header */}
+                                    <div className="flex items-center gap-3 px-2">
+                                        <span className={`text-xs font-bold px-2 py-1 rounded ${isNext ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                                            Week {weekData.week}
+                                        </span>
+                                        <h3 className="text-slate-200 font-bold text-lg">{weekData.label}</h3>
+                                        {weekData.adjustmentReason && (
+                                            <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded border border-yellow-400/20 ml-auto hidden md:inline-block">
+                                                AI 調整：{weekData.adjustmentReason}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Session Cards Container */}
+                                    <div className={`rounded-xl border overflow-hidden transition-all duration-300
+                                        ${isNext ? 'bg-slate-800/80 border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]' : 'bg-slate-800/40 border-slate-700 opacity-80 hover:opacity-100'}
+                                    `}>
+                                        {weekData.sessions.map((session, sIndex) => (
+                                            <div 
+                                                key={sIndex}
+                                                className={`p-4 md:p-5 grid grid-cols-12 gap-4 items-center border-b border-slate-700/50 last:border-0
+                                                    ${session.type === 'Main' ? 'bg-slate-800/50' : 'bg-slate-900/30'}
+                                                `}
+                                            >
+                                                {/* Session Label */}
+                                                <div className="col-span-12 md:col-span-3">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className={`text-xs font-bold uppercase tracking-wider
+                                                            ${session.type === 'Main' ? 'text-blue-400' : 'text-emerald-400'}
+                                                        `}>
+                                                            {session.dayLabel}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-slate-500 text-xs">{session.desc}</p>
+                                                </div>
+
+                                                {/* Training Details */}
+                                                <div className="col-span-6 md:col-span-5 flex flex-col justify-center space-y-1">
+                                                    <div className="flex items-baseline gap-2">
+                                                        <span className="text-2xl md:text-3xl font-black text-white">{session.weight}</span>
+                                                        <span className="text-sm text-slate-400 font-medium">kg</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-sm text-slate-300">
+                                                        <span className="bg-slate-700 px-1.5 py-0.5 rounded text-xs text-slate-300">
+                                                            {session.sets} 組
+                                                        </span>
+                                                        <span className="text-slate-500">x</span>
+                                                        <span className="bg-slate-700 px-1.5 py-0.5 rounded text-xs text-slate-300">
+                                                            {session.reps} 下
+                                                        </span>
+                                                        {session.type === 'Accessory' && (
+                                                            <span className="text-emerald-500 text-xs ml-1">(輕重量)</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* RPE Input (Only for Main Session) */}
+                                                <div className="col-span-6 md:col-span-4 flex flex-col items-end md:items-start gap-2">
+                                                    <div className="flex items-center justify-between w-full mb-1">
+                                                        <span className="text-xs text-slate-400">
+                                                            目標 RPE: <strong className="text-white">{session.targetRPE}</strong>
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    {session.type === 'Main' ? (
+                                                        <div className="relative w-full">
+                                                            <input 
+                                                                type="number" 
+                                                                placeholder="輸入實際 RPE"
+                                                                step="0.5"
+                                                                min="1"
+                                                                max="10"
+                                                                value={session.actualRPE || ''}
+                                                                onChange={(e) => handleRpeChange(session.logKey, e.target.value)}
+                                                                className={`w-full p-2 rounded-lg border text-sm font-bold text-center transition
+                                                                    ${session.actualRPE 
+                                                                        ? 'bg-slate-700 text-blue-300 border-blue-500/50' 
+                                                                        : 'bg-slate-900 text-white border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'}
+                                                                `}
+                                                            />
+                                                            <p className="text-[10px] text-slate-500 text-right w-full mt-1">
+                                                                {session.actualRPE ? '已記錄' : '練完請輸入'}
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-full bg-slate-900/50 p-2 rounded-lg border border-slate-800 text-center">
+                                                            <span className="text-xs text-slate-500">輔助日無須紀錄</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+                
+                <footer className="text-center text-slate-600 text-xs pt-8 pb-4">
+                    <p>Powerlifting Program Generator © 2023</p>
+                    <p className="mt-1">重量僅供參考，Day 2 輔助日請以動作質量為優先。</p>
+                </footer>
+            </main>
+        </div>
+    );
+}
