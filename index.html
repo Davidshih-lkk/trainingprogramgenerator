@@ -1,404 +1,600 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Dumbbell, Activity, TrendingUp, RotateCcw, Info, Calendar, ChevronDown } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深蹲生物力學模擬器 (3D 專業教學版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; }
+        canvas { touch-action: none; cursor: move; }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
 
-// --- 1. 設定檔：8週線性週期模型 ---
-const CYCLE_PLAN = [
-    // Phase 1: 肌肥大/適應 (Volume)
-    { week: 1, label: "肌肥大適應期", sets: 4, reps: 10, intensity: 0.65, targetRPE: 6, desc: "基礎適應，動作控制" },
-    { week: 2, label: "肌肥大累積期", sets: 4, reps: 10, intensity: 0.70, targetRPE: 7, desc: "增加重量，維持次數" },
-    
-    // Phase 2: 力量轉化 (Strength Transition)
-    { week: 3, label: "力量轉化期 I", sets: 4, reps: 6, intensity: 0.75, targetRPE: 7, desc: "次數下降，強度提升" },
-    { week: 4, label: "力量轉化期 II", sets: 4, reps: 5, intensity: 0.80, targetRPE: 8, desc: "核心力量建構" },
-    { week: 5, label: "力量轉化期 III", sets: 3, reps: 5, intensity: 0.825, targetRPE: 8.5, desc: "高強度 5x5 變體" },
 
-    // Phase 3: 巔峰期 (Peaking)
-    { week: 6, label: "大重量適應期", sets: 3, reps: 3, intensity: 0.875, targetRPE: 8.5, desc: "神經系統適應大重量" },
-    { week: 7, label: "巔峰前哨戰", sets: 3, reps: 2, intensity: 0.925, targetRPE: 9, desc: "接近極限的訓練" },
-
-    // Phase 4: 減量 (Deload)
-    { week: 8, label: "減量 / 測驗週", sets: 3, reps: 3, intensity: 0.60, targetRPE: 5, desc: "恢復或測試新 1RM" }
-];
-
-const LIFTS = ['squat', 'bench', 'deadlift'];
-const LIFT_LABELS = { squat: '深蹲 (Squat)', bench: '臥推 (Bench)', deadlift: '硬舉 (Deadlift)' };
-const RPE_ADJUSTMENT_FACTOR = 0.03; // 3% per RPE point
-
-// --- 工具函數：四捨五入到最近的 2.5kg ---
-const roundToPlate = (weight) => {
-    return Math.round(weight / 2.5) * 2.5;
-};
-
-export default function App() {
-    // --- State Management ---
-    const [userStats, setUserStats] = useState({ squat: 100, bench: 80, deadlift: 140 });
-    // 新增頻率狀態
-    const [frequencies, setFrequencies] = useState({ squat: 1, bench: 1, deadlift: 1 });
-    const [activeTab, setActiveTab] = useState('squat');
-    const [rpeLogs, setRpeLogs] = useState({});
-    const [showInfo, setShowInfo] = useState(false);
-
-    // --- 初始化：從 LocalStorage 讀取 ---
-    useEffect(() => {
-        try {
-            const savedStats = localStorage.getItem('pl_stats');
-            const savedFreq = localStorage.getItem('pl_freq'); // 讀取頻率
-            const savedLogs = localStorage.getItem('pl_logs');
+    <div class="w-full max-w-7xl bg-gray-800 rounded-xl shadow-2xl overflow-hidden flex flex-col lg:flex-row">
+        
+        <!-- 視覺化區域 -->
+        <div class="relative w-full lg:w-3/4 h-[600px] lg:h-[800px] bg-gray-950 border-r border-gray-700">
+            <canvas id="simCanvas" class="w-full h-full block"></canvas>
             
-            if (savedStats) setUserStats(JSON.parse(savedStats));
-            if (savedFreq) setFrequencies(JSON.parse(savedFreq));
-            if (savedLogs) setRpeLogs(JSON.parse(savedLogs));
-        } catch (error) {
-            console.error("讀取紀錄失敗:", error);
+            <!-- 左上：2D 數據 -->
+            <div class="absolute top-4 left-4 bg-gray-800/90 backdrop-blur p-3 rounded border border-gray-600 text-sm shadow-lg pointer-events-none">
+                <div class="font-bold text-gray-400 border-b border-gray-600 pb-1 mb-2">2D 側面參數</div>
+                <div class="grid grid-cols-1 gap-1">
+                    <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-purple-500"></span> <span>軀幹前傾: <strong id="torsoAngleDisplay">0°</strong></span></div>
+                    <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span> <span>髖角: <strong id="hipAngleDisplay">180°</strong></span></div>
+                </div>
+            </div>
+
+
+            <!-- 右上：3D 數據 -->
+            <div class="absolute top-4 right-4 bg-gray-800/90 backdrop-blur p-3 rounded border border-gray-600 text-sm shadow-lg pointer-events-none text-right">
+                <div class="font-bold text-gray-400 border-b border-gray-600 pb-1 mb-2">3D 骨盆與脊椎</div>
+                <div class="grid grid-cols-1 gap-1 justify-items-end">
+                    <div class="text-pink-400 font-bold" id="pelvisStatus3D">中立位</div>
+                    <div class="text-[10px] text-gray-500">拖曳畫面可旋轉視角</div>
+                </div>
+            </div>
+
+
+            <!-- 截圖按鈕 (新功能) -->
+            <button onclick="saveSnapshot()" class="absolute bottom-4 right-4 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded-lg border border-gray-500 shadow-lg transition flex items-center gap-2">
+                📸 下載截圖
+            </button>
+        </div>
+
+
+        <!-- 控制面板 -->
+        <div class="w-full lg:w-1/4 p-5 flex flex-col gap-4 overflow-y-auto h-[600px] lg:h-[800px] bg-gray-800 scrollbar-thin scrollbar-thumb-gray-600">
+            
+            <div class="border-b border-gray-700 pb-2 flex justify-between items-end">
+                <div>
+                    <h2 class="text-lg font-bold text-emerald-400 mb-1">3D 骨盆實驗室 v8.1</h2>
+                    <p class="text-[10px] text-gray-400">單機離線版</p>
+                </div>
+            </div>
+
+
+            <!-- 1. 深蹲深度 -->
+            <div class="bg-gray-700/40 p-3 rounded-lg border border-gray-600">
+                <label class="block text-sm font-bold mb-2 flex justify-between">
+                    <span>深蹲深度 (Depth)</span>
+                    <span class="text-emerald-400" id="depthVal">0%</span>
+                </label>
+                <input type="range" id="squatDepth" min="0" max="100" value="0" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-emerald-500">
+            </div>
+
+
+            <!-- 2. 骨盆三平面控制 -->
+            <div class="bg-pink-900/10 p-3 rounded-lg border border-pink-900/30 space-y-4">
+                <div class="flex justify-between items-center border-b border-pink-900/30 pb-1">
+                    <label class="block text-sm font-bold text-pink-300">🦴 骨盆 3D 控制</label>
+                    <button id="resetPelvis" class="text-[10px] bg-gray-700 px-2 py-1 rounded hover:bg-gray-600 transition">歸零</button>
+                </div>
+
+
+                <!-- Sagittal -->
+                <div>
+                    <div class="flex justify-between text-xs text-gray-400 mb-1">
+                        <span>後傾 (Posterior)</span>
+                        <span>前傾 (Anterior)</span>
+                    </div>
+                    <input type="range" id="pelvisTilt" min="-30" max="30" value="0" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-pink-500">
+                    <div class="text-[10px] text-center text-gray-500">影響：腰椎曲度 (Lordosis)</div>
+                </div>
+
+
+                <!-- Frontal -->
+                <div>
+                    <div class="flex justify-between text-xs text-gray-400 mb-1">
+                        <span>左提 (L Hike)</span>
+                        <span>右提 (R Hike)</span>
+                    </div>
+                    <input type="range" id="pelvisHike" min="-15" max="15" value="0" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-blue-400">
+                    <div class="text-[10px] text-center text-gray-500">影響：脊椎側彎 (Scoliosis)</div>
+                </div>
+
+
+                <!-- Transverse -->
+                <div>
+                    <div class="flex justify-between text-xs text-gray-400 mb-1">
+                        <span>左旋 (L Rot)</span>
+                        <span>右旋 (R Rot)</span>
+                    </div>
+                    <input type="range" id="pelvisRot" min="-20" max="20" value="0" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-orange-400">
+                    <div class="text-[10px] text-center text-gray-500">影響：脊椎扭轉 (Torsion)</div>
+                </div>
+            </div>
+
+
+            <!-- 3. 下肢參數 -->
+            <div class="bg-teal-900/20 p-3 rounded-lg border border-teal-900/30">
+                 <label class="block text-xs font-bold text-teal-300 mb-2">下肢參數</label>
+                 <div class="mb-2">
+                    <label class="block text-[10px] mb-1 flex justify-between"><span>站距</span><span id="stanceVal">40</span></label>
+                    <input type="range" id="stanceWidth" min="20" max="60" value="40" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-teal-500">
+                 </div>
+                 <div>
+                    <label class="block text-[10px] mb-1 flex justify-between"><span>足背外開</span><span id="toeOutVal">15°</span></label>
+                    <input type="range" id="toeOutAngle" min="0" max="45" value="15" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-orange-500">
+                 </div>
+            </div>
+
+
+            <!-- 4. 代償情境 -->
+            <div class="bg-red-900/10 p-3 rounded-lg border border-red-900/30">
+                <label class="block text-xs font-bold text-red-300 mb-1">代償情境</label>
+                <select id="scenarioSelect" class="w-full bg-gray-700 border border-gray-600 text-white text-xs rounded p-2 focus:ring-red-500">
+                    <option value="none">🟢 正常中立位</option>
+                    <option value="apt">⚠️ 骨盆前傾 (下交叉)</option>
+                    <option value="shift">⚠️ 骨盆側移 (長短腳代償)</option>
+                    <option value="twist">⚠️ 骨盆旋轉 (核心失衡)</option>
+                    <option value="butt_wink">🔴 屁股眨眼 (深蹲動態)</option>
+                </select>
+            </div>
+            
+            <div class="mt-auto border-t border-gray-700 pt-2">
+                <p id="analysisText" class="text-xs text-gray-300 leading-relaxed">
+                    系統就緒。調整滑桿觀察 3D 骨盆與脊椎的連動反應。
+                </p>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // --- Controls ---
+        const els = {
+            depth: document.getElementById('squatDepth'),
+            tilt: document.getElementById('pelvisTilt'),
+            hike: document.getElementById('pelvisHike'),
+            rot: document.getElementById('pelvisRot'),
+            stance: document.getElementById('stanceWidth'),
+            toeOut: document.getElementById('toeOutAngle'),
+            scenario: document.getElementById('scenarioSelect'),
+            resetPelvis: document.getElementById('resetPelvis')
+        };
+        
+        const displays = {
+            depth: document.getElementById('depthVal'),
+            torso: document.getElementById('torsoAngleDisplay'),
+            hip: document.getElementById('hipAngleDisplay'),
+            pStatus: document.getElementById('pelvisStatus3D'),
+            stance: document.getElementById('stanceVal'),
+            toeOut: document.getElementById('toeOutVal'),
+            analysis: document.getElementById('analysisText')
+        };
+
+
+        let state = {
+            depth: 0, 
+            tilt: 0, hike: 0, rot: 0,
+            stance: 40, toeOut: 15,
+            cameraAngle: { x: 0, y: -10 },
+            isDragging: false,
+            lastMouse: { x: 0, y: 0 },
+            scenario: 'none'
+        };
+
+
+        const BONE_LENS = {
+            femur: 110, tibia: 100, torso: 140, neck: 15
+        };
+
+
+        // --- 3D MATH UTILS ---
+        function rotateX(p, angle) {
+            const rad = angle * Math.PI / 180;
+            const c = Math.cos(rad), s = Math.sin(rad);
+            return { x: p.x, y: p.y * c - p.z * s, z: p.y * s + p.z * c };
         }
-    }, []);
-
-    // --- 儲存：寫入 LocalStorage ---
-    useEffect(() => {
-        try {
-            localStorage.setItem('pl_stats', JSON.stringify(userStats));
-            localStorage.setItem('pl_freq', JSON.stringify(frequencies)); // 儲存頻率
-            localStorage.setItem('pl_logs', JSON.stringify(rpeLogs));
-        } catch (error) {
-            console.error("儲存紀錄失敗:", error);
+        function rotateY(p, angle) {
+            const rad = angle * Math.PI / 180;
+            const c = Math.cos(rad), s = Math.sin(rad);
+            return { x: p.x * c + p.z * s, y: p.y, z: -p.x * s + p.z * c };
         }
-    }, [userStats, frequencies, rpeLogs]);
+        function rotateZ(p, angle) {
+            const rad = angle * Math.PI / 180;
+            const c = Math.cos(rad), s = Math.sin(rad);
+            return { x: p.x * c - p.y * s, y: p.x * s + p.y * c, z: p.z };
+        }
+        function translate(p, v) { return { x: p.x + v.x, y: p.y + v.y, z: p.z + v.z }; }
 
-    // --- 核心邏輯：動態計算課表 ---
-    const calculatePlan = (liftName) => {
-        let currentMax = userStats[liftName] || 0;
-        let planData = [];
-        const freq = frequencies[liftName] || 1;
 
-        CYCLE_PLAN.forEach((weekPlan) => {
-            // 1. 計算主訓練日 (Main Day) 數據
-            const rawWeight = currentMax * weekPlan.intensity;
-            const roundedWeight = roundToPlate(rawWeight);
+        // --- 3D PELVIS GEOMETRY (REALISTIC) ---
+        function getRealisticPelvisGeo() {
+            const w = 35; 
+            const h = 30; 
+            return {
+                sacrum_base: { x: 0, y: 0, z: 0 },
+                sacrum_tip: { x: 0, y: -15, z: -5 },
+                l_iliac_crest_post: { x: -w*0.4, y: 10, z: -5 }, 
+                l_iliac_crest_lat:  { x: -w, y: 8, z: 5 },       
+                l_asis:             { x: -w*0.7, y: 0, z: 15 },  
+                l_acetabulum:       { x: -w*0.8, y: -10, z: 5 }, 
+                l_ischium:          { x: -w*0.5, y: -25, z: -5 },
+                l_pubis:            { x: -w*0.2, y: -18, z: 12 },
+                r_iliac_crest_post: { x: w*0.4, y: 10, z: -5 },
+                r_iliac_crest_lat:  { x: w, y: 8, z: 5 },
+                r_asis:             { x: w*0.7, y: 0, z: 15 },
+                r_acetabulum:       { x: w*0.8, y: -10, z: 5 },
+                r_ischium:          { x: w*0.5, y: -25, z: -5 },
+                r_pubis:            { x: w*0.2, y: -18, z: 12 },
+                pubic_sym:          { x: 0, y: -18, z: 12 }
+            };
+        }
 
-            // 2. 檢查 RPE 紀錄 (僅針對主訓練日)
-            const logKey = `${liftName}-${weekPlan.week}`;
-            const actualRPE = rpeLogs[logKey];
 
-            // 3. Autoregulation: 計算下週基準
-            let adjustedMax = currentMax;
-            let adjustmentReason = null;
+        // --- 3D BEZIER FOR SPINE ---
+        function getBezierPoint3D(t, p0, p1, p2, p3) {
+            const mt = 1 - t;
+            const mt2 = mt * mt; const mt3 = mt2 * mt;
+            const t2 = t * t; const t3 = t2 * t;
+            const f0 = mt3; const f1 = 3 * mt2 * t;
+            const f2 = 3 * mt * t2; const f3 = t3;
+            return {
+                x: f0*p0.x + f1*p1.x + f2*p2.x + f3*p3.x,
+                y: f0*p0.y + f1*p1.y + f2*p2.y + f3*p3.y,
+                z: f0*p0.z + f1*p1.z + f2*p2.z + f3*p3.z
+            };
+        }
 
-            if (actualRPE !== undefined && actualRPE !== "") {
-                const rpeDiff = weekPlan.targetRPE - parseFloat(actualRPE);
-                if (Math.abs(rpeDiff) >= 0.5) {
-                    const adjustmentPercent = rpeDiff * RPE_ADJUSTMENT_FACTOR;
-                    adjustedMax = currentMax * (1 + adjustmentPercent);
-                    adjustmentReason = rpeDiff > 0 
-                        ? `上週輕鬆 (RPE-${Math.abs(rpeDiff)})，強度上調 ${(adjustmentPercent*100).toFixed(1)}%`
-                        : `上週疲勞 (RPE+${Math.abs(rpeDiff)})，強度下修 ${(Math.abs(adjustmentPercent)*100).toFixed(1)}%`;
+
+        // --- MAIN CALCULATION ---
+        function calculateFrame() {
+            // 1. Base Mechanics
+            const maxAnkleDeg = 25;
+            const ankleRad = maxAnkleDeg * (Math.PI/180) * state.depth;
+            const sideKneeZ = Math.sin(ankleRad) * BONE_LENS.tibia;
+            const sideKneeY = Math.cos(ankleRad) * BONE_LENS.tibia;
+            
+            const maxFemurRot = Math.PI * 0.75;
+            const femurRad = state.depth * maxFemurRot;
+            const sideHipZ = sideKneeZ - Math.sin(femurRad) * BONE_LENS.femur;
+            const sideHipY = sideKneeY + Math.cos(femurRad) * BONE_LENS.femur;
+
+
+            // Torso
+            let dx = -sideHipZ;
+            let torsoH = Math.sqrt(Math.pow(BONE_LENS.torso, 2) - dx*dx) || BONE_LENS.torso;
+            const sideShoulderY = sideHipY + torsoH;
+            const leanAngleDeg = Math.atan2(dx, torsoH) * (180/Math.PI);
+            const hipAngle = 180 - (femurRad*180/Math.PI) - leanAngleDeg;
+
+
+            // 2. Pelvic Transform
+            let buttWink = 0;
+            if(hipAngle < 40) buttWink = (40 - hipAngle) * -1.5;
+            if(state.scenario === 'butt_wink') buttWink = -25 * state.depth;
+
+
+            const tTilt = state.tilt + buttWink;
+            const tHike = state.hike;
+            const tRot = state.rot;
+
+
+            const rawPelvis = getRealisticPelvisGeo();
+            const transformedPelvis = {};
+            const localHipCenter = { x: 0, y: -10, z: 5 };
+            const worldHipCenter = { x: 0, y: sideHipY, z: sideHipZ };
+
+
+            for (let key in rawPelvis) {
+                let p = rawPelvis[key];
+                p = { x: p.x - localHipCenter.x, y: p.y - localHipCenter.y, z: p.z - localHipCenter.z };
+                p = rotateY(p, tRot);
+                p = rotateZ(p, tHike);
+                p = rotateX(p, tTilt);
+                p = rotateX(p, leanAngleDeg);
+                p = translate(p, worldHipCenter);
+                transformedPelvis[key] = p;
+            }
+
+
+            // 3. Spine
+            const sacrumPos = transformedPelvis.sacrum_base;
+            const t1Pos = {
+                x: 0,
+                y: sideShoulderY, 
+                z: worldHipCenter.z + (Math.sin(leanAngleDeg * Math.PI/180) * BONE_LENS.torso)
+            };
+            // Fix T1 Y to match arc
+            t1Pos.y = worldHipCenter.y + (Math.cos(leanAngleDeg * Math.PI/180) * BONE_LENS.torso);
+
+
+            let sacrumUp = { x: 0, y: 1, z: 0 };
+            sacrumUp = rotateY(sacrumUp, tRot);
+            sacrumUp = rotateZ(sacrumUp, tHike);
+            sacrumUp = rotateX(sacrumUp, tTilt);
+            sacrumUp = rotateX(sacrumUp, leanAngleDeg);
+            
+            const cp1Len = BONE_LENS.torso * 0.4;
+            const cp1 = {
+                x: sacrumPos.x + sacrumUp.x * cp1Len,
+                y: sacrumPos.y + sacrumUp.y * cp1Len,
+                z: sacrumPos.z + sacrumUp.z * cp1Len
+            };
+
+
+            let t1Down = { 
+                x: 0, 
+                y: -Math.cos(leanAngleDeg * Math.PI/180), 
+                z: -Math.sin(leanAngleDeg * Math.PI/180) 
+            };
+            const cp2Len = BONE_LENS.torso * 0.4;
+            const cp2 = {
+                x: t1Pos.x - t1Down.x * cp2Len, 
+                y: t1Pos.y + t1Down.y * cp2Len,
+                z: t1Pos.z + t1Down.z * cp2Len
+            };
+
+
+            const spine = [];
+            for(let i=0; i<=17; i++) spine.push(getBezierPoint3D(i/17, sacrumPos, cp1, cp2, t1Pos));
+
+
+            // 4. Legs
+            const halfStance = state.stance / 2;
+            const toeRad = state.toeOut * Math.PI / 180;
+            const ankles = { L: { x: -halfStance, y: 0, z: 0 }, R: { x: halfStance, y: 0, z: 0 } };
+            const hips = { L: transformedPelvis.l_acetabulum, R: transformedPelvis.r_acetabulum };
+            const knees = {};
+            ['L', 'R'].forEach(side => {
+                const dir = side==='L' ? -1 : 1;
+                const kX = ankles[side].x + (Math.sin(toeRad) * sideKneeZ * 1.2 * dir);
+                knees[side] = { x: kX, y: sideKneeY, z: sideKneeZ };
+            });
+
+
+            return {
+                pelvis: transformedPelvis,
+                spine: spine,
+                ankles, knees, hips,
+                t1: t1Pos,
+                meta: {
+                    lean: Math.round(leanAngleDeg),
+                    hipAngle: Math.round(hipAngle),
+                    status: `T:${Math.round(tTilt)} H:${Math.round(tHike)} R:${Math.round(tRot)}`
                 }
-            }
+            };
+        }
 
-            // 4. 生成該週的所有訓練日 (Sessions)
-            const weeklySessions = [];
+
+        // --- DRAWING ---
+        function draw() {
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+            const data = calculateFrame();
             
-            // Day 1: 主訓練
-            weeklySessions.push({
-                dayLabel: "Day 1 (主訓練)",
-                type: "Main",
-                sets: weekPlan.sets,
-                reps: weekPlan.reps,
-                weight: roundedWeight,
-                targetRPE: weekPlan.targetRPE,
-                actualRPE: actualRPE, // 用於輸入框
-                logKey: logKey, // 用於辨識輸入位置
-                desc: "重點：達成目標 RPE，這是進度指標。"
+            displays.torso.innerText = data.meta.lean + "°";
+            displays.hip.innerText = data.meta.hipAngle + "°";
+            displays.pStatus.innerText = data.meta.status;
+
+
+            let analysis = "";
+            if (Math.abs(state.hike) > 5) analysis = "🟠 **脊椎側彎代償**：骨盆高低導致脊椎必須側彎(S型)以維持頭部重心平衡。";
+            else if (Math.abs(state.rot) > 5) analysis = "🟠 **脊椎扭轉**：骨盆旋轉導致腰椎產生扭力，這常是單邊腰痛的主因。";
+            else if (state.tilt < -10) analysis = "🔴 **腰椎屈曲**：骨盆後傾導致腰椎前凸消失，椎間盤壓力極大。";
+            else analysis = "骨盆與脊椎排列良好。試著旋轉視角觀察脊椎每一節的排列。";
+            displays.analysis.innerHTML = analysis;
+
+
+            draw2D(data, w * 0.25, h);
+            draw3D(data, w * 0.625, h);
+
+
+            ctx.beginPath(); ctx.moveTo(w*0.25, 20); ctx.lineTo(w*0.25, h-20);
+            ctx.strokeStyle = "#4b5563"; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
+        }
+
+
+        function draw2D(data, cx, h) {
+            const scale = 1.5;
+            const ground = h * 0.85;
+            const map = (z, y) => ({ x: cx + z * scale, y: ground - y * scale });
+
+
+            ctx.strokeStyle = "#4b5563"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(cx-50, ground); ctx.lineTo(cx+100, ground); ctx.stroke();
+
+
+            ctx.strokeStyle = "#a855f7"; ctx.lineWidth = 5;
+            ctx.beginPath();
+            data.spine.forEach((p, i) => {
+                const pt = map(p.z, p.y);
+                if(i===0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+            });
+            ctx.stroke();
+
+
+            const hip = map(data.hips.L.z, data.hips.L.y);
+            const knee = map(data.knees.L.z, data.knees.L.y);
+            const ankle = map(data.ankles.L.z, data.ankles.L.y);
+            
+            ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(knee.x, knee.y); ctx.stroke();
+            ctx.strokeStyle = "#f97316";
+            ctx.beginPath(); ctx.moveTo(knee.x, knee.y); ctx.lineTo(ankle.x, ankle.y); ctx.stroke();
+        }
+
+
+        function draw3D(data, cx, h) {
+            const scale = 3.5;
+            const ground = h * 0.7;
+            const camX = state.cameraAngle.y; 
+            const camY = state.cameraAngle.x;
+
+
+            const project = (p) => {
+                const centerY = 50;
+                let x = p.x, y = p.y - centerY, z = p.z;
+                let p1 = rotateY({x,y,z}, camY);
+                p1 = rotateX(p1, camX);
+                const fov = 500; const dist = 600;
+                const s = fov / (dist - p1.z);
+                return { x: cx + p1.x * scale * s, y: ground - (p1.y + centerY) * scale * s, z: p1.z };
+            };
+
+
+            ctx.strokeStyle = "#374151"; ctx.lineWidth = 1;
+            for(let i=-100; i<=100; i+=50) {
+                const p1 = project({x:i,y:0,z:-100}), p2 = project({x:i,y:0,z:100});
+                ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+                const p3 = project({x:-100,y:0,z:i}), p4 = project({x:100,y:0,z:i});
+                ctx.beginPath(); ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.stroke();
+            }
+
+
+            const p = {};
+            for(let k in data.pelvis) p[k] = project(data.pelvis[k]);
+            
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#ec4899";
+            ctx.fillStyle = "rgba(236, 72, 153, 0.4)";
+
+
+            // Left Ilium
+            ctx.beginPath();
+            ctx.moveTo(p.sacrum_base.x, p.sacrum_base.y);
+            ctx.lineTo(p.l_iliac_crest_post.x, p.l_iliac_crest_post.y);
+            ctx.lineTo(p.l_iliac_crest_lat.x, p.l_iliac_crest_lat.y);
+            ctx.lineTo(p.l_asis.x, p.l_asis.y);
+            ctx.lineTo(p.l_acetabulum.x, p.l_acetabulum.y);
+            ctx.lineTo(p.l_pubis.x, p.l_pubis.y);
+            ctx.lineTo(p.pubic_sym.x, p.pubic_sym.y);
+            ctx.lineTo(p.l_ischium.x, p.l_ischium.y);
+            ctx.lineTo(p.sacrum_tip.x, p.sacrum_tip.y);
+            ctx.lineTo(p.sacrum_base.x, p.sacrum_base.y);
+            ctx.fill(); ctx.stroke();
+
+
+            // Right Ilium
+            ctx.beginPath();
+            ctx.moveTo(p.sacrum_base.x, p.sacrum_base.y);
+            ctx.lineTo(p.r_iliac_crest_post.x, p.r_iliac_crest_post.y);
+            ctx.lineTo(p.r_iliac_crest_lat.x, p.r_iliac_crest_lat.y);
+            ctx.lineTo(p.r_asis.x, p.r_asis.y);
+            ctx.lineTo(p.r_acetabulum.x, p.r_acetabulum.y);
+            ctx.lineTo(p.r_pubis.x, p.r_pubis.y);
+            ctx.lineTo(p.pubic_sym.x, p.pubic_sym.y);
+            ctx.lineTo(p.r_ischium.x, p.r_ischium.y);
+            ctx.lineTo(p.sacrum_tip.x, p.sacrum_tip.y);
+            ctx.lineTo(p.sacrum_base.x, p.sacrum_base.y);
+            ctx.fill(); ctx.stroke();
+            
+            ctx.fillStyle = "rgba(236, 72, 153, 0.7)";
+            ctx.beginPath();
+            ctx.moveTo(p.sacrum_base.x, p.sacrum_base.y);
+            ctx.lineTo(p.l_iliac_crest_post.x, p.l_iliac_crest_post.y);
+            ctx.lineTo(p.sacrum_tip.x, p.sacrum_tip.y);
+            ctx.lineTo(p.r_iliac_crest_post.x, p.r_iliac_crest_post.y);
+            ctx.fill();
+
+
+            data.spine.forEach((v, i) => {
+                const vp = project(v);
+                const size = i < 5 ? 5 : 4; 
+                ctx.fillStyle = i < 5 ? "#a855f7" : "#8b5cf6"; 
+                ctx.strokeStyle = "#e9d5ff";
+                ctx.beginPath();
+                ctx.rect(vp.x - size, vp.y - size/2, size*2, size);
+                ctx.fill(); ctx.stroke();
             });
 
-            // Day 2+: 輔助訓練 (如果有設定頻率 > 1)
-            if (freq > 1) {
-                // 輔助日邏輯：重量為主日的 85%，組數少 1 組，次數相同 (技術鞏固)
-                // 或者在減量週保持更輕
-                const isDeload = weekPlan.label.includes("減量");
-                const backoffFactor = isDeload ? 0.8 : 0.85; // 減量週更輕
-                const backoffWeight = roundToPlate(roundedWeight * backoffFactor);
+
+            ['L', 'R'].forEach(s => {
+                const a = project(data.ankles[s]);
+                const k = project(data.knees[s]);
+                const h = project(data.hips[s]);
+
+
+                ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 6;
+                ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.lineTo(k.x, k.y); ctx.stroke();
+                ctx.strokeStyle = "#f97316";
+                ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(a.x, a.y); ctx.stroke();
                 
-                weeklySessions.push({
-                    dayLabel: "Day 2 (輔助日)",
-                    type: "Accessory",
-                    sets: Math.max(2, weekPlan.sets - 1), // 至少2組
-                    reps: weekPlan.reps,
-                    weight: backoffWeight,
-                    targetRPE: Math.max(5, weekPlan.targetRPE - 1.5), // RPE 較低
-                    desc: "重點：完美技術與爆發力，不力竭。"
-                });
-            }
-
-            if (freq > 2) {
-                // Day 3: 更輕的恢復/速度日
-                 const speedWeight = roundToPlate(roundedWeight * 0.75);
-                 weeklySessions.push({
-                    dayLabel: "Day 3 (速度/技巧)",
-                    type: "Accessory",
-                    sets: 3,
-                    reps: Math.max(3, Math.round(weekPlan.reps / 2)), // 次數減半做爆發
-                    weight: speedWeight,
-                    targetRPE: 5,
-                    desc: "重點：專注槓鈴移動速度 (Bar Speed)。"
-                });
-            }
-
-            // 將該週數據推入總表
-            planData.push({
-                ...weekPlan,
-                sessions: weeklySessions,
-                nextMax: adjustedMax,
-                adjustmentReason: adjustmentReason
+                ctx.fillStyle = "white";
+                ctx.beginPath(); ctx.arc(k.x, k.y, 4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI*2); ctx.fill();
             });
+            
+            const t1 = project(data.t1);
+            ctx.fillStyle = "#e5e7eb";
+            ctx.beginPath(); ctx.arc(t1.x, t1.y - 15, 12, 0, Math.PI*2); ctx.fill();
+        }
 
-            // 更新 currentMax
-            currentMax = adjustedMax;
+
+        // --- SNAPSHOT FUNCTION ---
+        function saveSnapshot() {
+            const link = document.createElement('a');
+            link.download = 'squat_model_3d_snapshot.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+
+        // --- EVENTS ---
+        canvas.addEventListener('mousedown', e => { state.isDragging = true; state.lastMouse = {x:e.clientX, y:e.clientY}; });
+        window.addEventListener('mousemove', e => {
+            if(!state.isDragging) return;
+            state.cameraAngle.x += (e.clientX - state.lastMouse.x)*0.5;
+            state.cameraAngle.y = Math.max(-45, Math.min(45, state.cameraAngle.y + (e.clientY - state.lastMouse.y)*0.5));
+            state.lastMouse = {x:e.clientX, y:e.clientY};
+            draw();
+        });
+        window.addEventListener('mouseup', () => state.isDragging = false);
+
+
+        const inputs = ['depth', 'tilt', 'hike', 'rot', 'stance', 'toeOut'];
+        inputs.forEach(k => els[k] && els[k].addEventListener('input', e => {
+            state[k] = parseFloat(e.target.value);
+            if(k==='depth') state.depth = e.target.value/100;
+            draw();
+        }));
+        els.resetPelvis.addEventListener('click', () => {
+            state.tilt=0; state.hike=0; state.rot=0;
+            els.tilt.value=0; els.hike.value=0; els.rot.value=0;
+            draw();
+        });
+        els.scenario.addEventListener('change', e => {
+            state.scenario = e.target.value;
+            if(state.scenario === 'apt') { state.tilt = 20; els.tilt.value = 20; }
+            else if(state.scenario === 'shift') { state.hike = 10; els.hike.value = 10; }
+            else if(state.scenario === 'twist') { state.rot = 15; els.rot.value = 15; }
+            else { state.tilt=0; state.hike=0; state.rot=0; els.tilt.value=0; els.hike.value=0; els.rot.value=0; }
+            draw();
         });
 
-        return planData;
-    };
 
-    const handleStatChange = (e) => {
-        const val = parseFloat(e.target.value);
-        setUserStats({ ...userStats, [e.target.name]: isNaN(val) ? 0 : val });
-    };
+        function resize() { canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight; draw(); }
+        window.addEventListener('resize', resize);
+        resize();
 
-    const handleFreqChange = (lift, val) => {
-        setFrequencies({ ...frequencies, [lift]: parseInt(val) });
-    }
 
-    const handleRpeChange = (logKey, value) => {
-        setRpeLogs({ ...rpeLogs, [logKey]: value });
-    };
-
-    const resetData = () => {
-        if(window.confirm("確定要重置所有數據嗎？")) {
-            setUserStats({ squat: 100, bench: 80, deadlift: 140 });
-            setFrequencies({ squat: 1, bench: 1, deadlift: 1 });
-            setRpeLogs({});
-        }
-    };
-
-    const currentPlanData = useMemo(() => calculatePlan(activeTab), [activeTab, userStats, frequencies, rpeLogs]);
-
-    return (
-        <div className="min-h-screen bg-slate-900 text-slate-200 pb-12 font-sans">
-            {/* Header */}
-            <header className="bg-slate-800 border-b border-slate-700 p-6 sticky top-0 z-20 shadow-md">
-                <div className="max-w-4xl mx-auto flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-600 rounded-lg">
-                            <Activity className="text-white" size={24} />
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold text-white">AI 健力課表生成器</h1>
-                            <p className="text-xs text-slate-400">Linear Periodization with RPE Autoregulation</p>
-                        </div>
-                    </div>
-                    <button onClick={() => setShowInfo(!showInfo)} className="text-slate-400 hover:text-blue-400 transition">
-                        <Info size={24} />
-                    </button>
-                </div>
-            </header>
-
-            <main className="max-w-4xl mx-auto p-4 md:p-6 space-y-8">
-
-                {/* Info Box */}
-                {showInfo && (
-                    <div className="bg-blue-900/30 border border-blue-700/50 p-4 rounded-xl text-sm text-blue-200 space-y-2 animate-fade-in">
-                        <h3 className="font-bold flex items-center gap-2"><TrendingUp size={16}/> 多頻率訓練邏輯說明</h3>
-                        <ul className="list-disc list-inside space-y-1 ml-2 text-blue-100/80">
-                            <li><strong>Day 1 (主訓練)：</strong> 這是推動進度的關鍵日，請務必記錄 RPE。系統會根據此日的表現調整下週強度。</li>
-                            <li><strong>Day 2+ (輔助日)：</strong> 如果您設定每週訓練多次，系統會生成較輕的輔助日 (約主日重量的 85%)。這些日子專注於動作技術，<strong>不會影響</strong> AI 的強度計算。</li>
-                        </ul>
-                    </div>
-                )}
-
-                {/* Input Section */}
-                <section className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-semibold text-slate-200 flex items-center gap-2">
-                            <Dumbbell size={20} className="text-blue-400"/> 
-                            設定 1RM 與 訓練頻率
-                        </h2>
-                        <button onClick={resetData} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-900/20 transition">
-                            <RotateCcw size={12}/> 重置
-                        </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {LIFTS.map(lift => (
-                            <div key={lift} className="space-y-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-                                <div className="flex items-center justify-between">
-                                    <label className="block text-sm font-bold text-slate-300 uppercase tracking-wider">
-                                        {LIFT_LABELS[lift].split(' ')[0]}
-                                    </label>
-                                    <span className="text-xs text-slate-500 uppercase">{lift}</span>
-                                </div>
-                                
-                                {/* 1RM Input */}
-                                <div className="relative group">
-                                    <input
-                                        type="number"
-                                        name={lift}
-                                        value={userStats[lift]}
-                                        onChange={handleStatChange}
-                                        className="w-full bg-slate-900 text-white border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-lg font-bold"
-                                        placeholder="0"
-                                    />
-                                    <div className="absolute right-3 top-2.5 text-slate-500 text-xs font-medium">KG (1RM)</div>
-                                </div>
-
-                                {/* Frequency Selector */}
-                                <div className="flex items-center gap-2 bg-slate-900 rounded-lg px-3 py-2 border border-slate-600">
-                                    <Calendar size={14} className="text-blue-400"/>
-                                    <select 
-                                        value={frequencies[lift] || 1}
-                                        onChange={(e) => handleFreqChange(lift, e.target.value)}
-                                        className="bg-transparent text-sm text-slate-200 w-full outline-none cursor-pointer"
-                                    >
-                                        <option value="1">每週 1 練</option>
-                                        <option value="2">每週 2 練</option>
-                                        <option value="3">每週 3 練</option>
-                                    </select>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-
-                {/* Plan Display Section */}
-                <section>
-                    {/* Tabs */}
-                    <div className="flex space-x-1 bg-slate-800 p-1 rounded-xl mb-6 overflow-x-auto">
-                        {LIFTS.map(lift => (
-                            <button
-                                key={lift}
-                                onClick={() => setActiveTab(lift)}
-                                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition whitespace-nowrap
-                                    ${activeTab === lift 
-                                        ? 'bg-blue-600 text-white shadow-lg' 
-                                        : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
-                            >
-                                {LIFT_LABELS[lift]} 課表
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Schedule Cards */}
-                    <div className="space-y-6">
-                        {currentPlanData.map((weekData, index) => {
-                            // Determine status based on Main Session RPE input
-                            const mainSession = weekData.sessions[0];
-                            const hasInput = mainSession.actualRPE !== undefined && mainSession.actualRPE !== "";
-                            const isNext = !hasInput && (index === 0 || currentPlanData[index-1].sessions[0].actualRPE !== undefined);
-                            
-                            return (
-                                <div key={weekData.week} className="space-y-2 animate-slide-up">
-                                    {/* Week Header */}
-                                    <div className="flex items-center gap-3 px-2">
-                                        <span className={`text-xs font-bold px-2 py-1 rounded ${isNext ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400'}`}>
-                                            Week {weekData.week}
-                                        </span>
-                                        <h3 className="text-slate-200 font-bold text-lg">{weekData.label}</h3>
-                                        {weekData.adjustmentReason && (
-                                            <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded border border-yellow-400/20 ml-auto hidden md:inline-block">
-                                                AI 調整：{weekData.adjustmentReason}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* Session Cards Container */}
-                                    <div className={`rounded-xl border overflow-hidden transition-all duration-300
-                                        ${isNext ? 'bg-slate-800/80 border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]' : 'bg-slate-800/40 border-slate-700 opacity-80 hover:opacity-100'}
-                                    `}>
-                                        {weekData.sessions.map((session, sIndex) => (
-                                            <div 
-                                                key={sIndex}
-                                                className={`p-4 md:p-5 grid grid-cols-12 gap-4 items-center border-b border-slate-700/50 last:border-0
-                                                    ${session.type === 'Main' ? 'bg-slate-800/50' : 'bg-slate-900/30'}
-                                                `}
-                                            >
-                                                {/* Session Label */}
-                                                <div className="col-span-12 md:col-span-3">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className={`text-xs font-bold uppercase tracking-wider
-                                                            ${session.type === 'Main' ? 'text-blue-400' : 'text-emerald-400'}
-                                                        `}>
-                                                            {session.dayLabel}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-slate-500 text-xs">{session.desc}</p>
-                                                </div>
-
-                                                {/* Training Details */}
-                                                <div className="col-span-6 md:col-span-5 flex flex-col justify-center space-y-1">
-                                                    <div className="flex items-baseline gap-2">
-                                                        <span className="text-2xl md:text-3xl font-black text-white">{session.weight}</span>
-                                                        <span className="text-sm text-slate-400 font-medium">kg</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-sm text-slate-300">
-                                                        <span className="bg-slate-700 px-1.5 py-0.5 rounded text-xs text-slate-300">
-                                                            {session.sets} 組
-                                                        </span>
-                                                        <span className="text-slate-500">x</span>
-                                                        <span className="bg-slate-700 px-1.5 py-0.5 rounded text-xs text-slate-300">
-                                                            {session.reps} 下
-                                                        </span>
-                                                        {session.type === 'Accessory' && (
-                                                            <span className="text-emerald-500 text-xs ml-1">(輕重量)</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* RPE Input (Only for Main Session) */}
-                                                <div className="col-span-6 md:col-span-4 flex flex-col items-end md:items-start gap-2">
-                                                    <div className="flex items-center justify-between w-full mb-1">
-                                                        <span className="text-xs text-slate-400">
-                                                            目標 RPE: <strong className="text-white">{session.targetRPE}</strong>
-                                                        </span>
-                                                    </div>
-                                                    
-                                                    {session.type === 'Main' ? (
-                                                        <div className="relative w-full">
-                                                            <input 
-                                                                type="number" 
-                                                                placeholder="輸入實際 RPE"
-                                                                step="0.5"
-                                                                min="1"
-                                                                max="10"
-                                                                value={session.actualRPE || ''}
-                                                                onChange={(e) => handleRpeChange(session.logKey, e.target.value)}
-                                                                className={`w-full p-2 rounded-lg border text-sm font-bold text-center transition
-                                                                    ${session.actualRPE 
-                                                                        ? 'bg-slate-700 text-blue-300 border-blue-500/50' 
-                                                                        : 'bg-slate-900 text-white border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'}
-                                                                `}
-                                                            />
-                                                            <p className="text-[10px] text-slate-500 text-right w-full mt-1">
-                                                                {session.actualRPE ? '已記錄' : '練完請輸入'}
-                                                            </p>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="w-full bg-slate-900/50 p-2 rounded-lg border border-slate-800 text-center">
-                                                            <span className="text-xs text-slate-500">輔助日無須紀錄</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </section>
-                
-                <footer className="text-center text-slate-600 text-xs pt-8 pb-4">
-                    <p>Powerlifting Program Generator © 2023</p>
-                    <p className="mt-1">重量僅供參考，Day 2 輔助日請以動作質量為優先。</p>
-                </footer>
-            </main>
-        </div>
-    );
-}
+    </script>
+</body>
+</html>
