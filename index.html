@@ -3,598 +3,803 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深蹲生物力學模擬器 (3D 專業教學版)</title>
+    <title>量化交易策略回測介面</title>
+    <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Plotly.js for charting -->
+    <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; }
-        canvas { touch-action: none; cursor: move; }
-        
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 16px;
-            width: 16px;
-            border-radius: 50%;
-            background: #ffffff;
-            cursor: pointer;
-            margin-top: -6px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 4px;
-            cursor: pointer;
-            border-radius: 2px;
-        }
+        /* 使用 Inter 字體 */
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); }
+        .input-group label { font-weight: 500; color: #1f2937; }
+        .input-group input, .input-group select { border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 12px; transition: border-color 0.15s; width: 100%; }
+        .input-group input:focus, .input-group select:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+        .file-upload-label { cursor: pointer; border: 2px dashed #9ca3af; padding: 12px; text-align: center; border-radius: 8px; transition: background-color 0.2s; }
+        .file-upload-label:hover { background-color: #f9fafb; }
+        .btn-primary { background-color: #3b82f6; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 600; transition: background-color 0.2s; }
+        .btn-primary:hover:not(:disabled) { background-color: #2563eb; }
+        .btn-primary:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .result-box { border-left: 4px solid #10b981; padding-left: 1rem; }
     </style>
-</head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
-
-
-    <div class="w-full max-w-7xl bg-gray-800 rounded-xl shadow-2xl overflow-hidden flex flex-col lg:flex-row">
-        
-        <!-- 視覺化區域 -->
-        <div class="relative w-full lg:w-3/4 h-[600px] lg:h-[800px] bg-gray-950 border-r border-gray-700">
-            <canvas id="simCanvas" class="w-full h-full block"></canvas>
-            
-            <!-- 左上：2D 數據 -->
-            <div class="absolute top-4 left-4 bg-gray-800/90 backdrop-blur p-3 rounded border border-gray-600 text-sm shadow-lg pointer-events-none">
-                <div class="font-bold text-gray-400 border-b border-gray-600 pb-1 mb-2">2D 側面參數</div>
-                <div class="grid grid-cols-1 gap-1">
-                    <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-purple-500"></span> <span>軀幹前傾: <strong id="torsoAngleDisplay">0°</strong></span></div>
-                    <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span> <span>髖角: <strong id="hipAngleDisplay">180°</strong></span></div>
-                </div>
-            </div>
-
-
-            <!-- 右上：3D 數據 -->
-            <div class="absolute top-4 right-4 bg-gray-800/90 backdrop-blur p-3 rounded border border-gray-600 text-sm shadow-lg pointer-events-none text-right">
-                <div class="font-bold text-gray-400 border-b border-gray-600 pb-1 mb-2">3D 骨盆與脊椎</div>
-                <div class="grid grid-cols-1 gap-1 justify-items-end">
-                    <div class="text-pink-400 font-bold" id="pelvisStatus3D">中立位</div>
-                    <div class="text-[10px] text-gray-500">拖曳畫面可旋轉視角</div>
-                </div>
-            </div>
-
-
-            <!-- 截圖按鈕 (新功能) -->
-            <button onclick="saveSnapshot()" class="absolute bottom-4 right-4 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded-lg border border-gray-500 shadow-lg transition flex items-center gap-2">
-                📸 下載截圖
-            </button>
-        </div>
-
-
-        <!-- 控制面板 -->
-        <div class="w-full lg:w-1/4 p-5 flex flex-col gap-4 overflow-y-auto h-[600px] lg:h-[800px] bg-gray-800 scrollbar-thin scrollbar-thumb-gray-600">
-            
-            <div class="border-b border-gray-700 pb-2 flex justify-between items-end">
-                <div>
-                    <h2 class="text-lg font-bold text-emerald-400 mb-1">3D 骨盆實驗室 v8.1</h2>
-                    <p class="text-[10px] text-gray-400">單機離線版</p>
-                </div>
-            </div>
-
-
-            <!-- 1. 深蹲深度 -->
-            <div class="bg-gray-700/40 p-3 rounded-lg border border-gray-600">
-                <label class="block text-sm font-bold mb-2 flex justify-between">
-                    <span>深蹲深度 (Depth)</span>
-                    <span class="text-emerald-400" id="depthVal">0%</span>
-                </label>
-                <input type="range" id="squatDepth" min="0" max="100" value="0" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-emerald-500">
-            </div>
-
-
-            <!-- 2. 骨盆三平面控制 -->
-            <div class="bg-pink-900/10 p-3 rounded-lg border border-pink-900/30 space-y-4">
-                <div class="flex justify-between items-center border-b border-pink-900/30 pb-1">
-                    <label class="block text-sm font-bold text-pink-300">🦴 骨盆 3D 控制</label>
-                    <button id="resetPelvis" class="text-[10px] bg-gray-700 px-2 py-1 rounded hover:bg-gray-600 transition">歸零</button>
-                </div>
-
-
-                <!-- Sagittal -->
-                <div>
-                    <div class="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>後傾 (Posterior)</span>
-                        <span>前傾 (Anterior)</span>
-                    </div>
-                    <input type="range" id="pelvisTilt" min="-30" max="30" value="0" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-pink-500">
-                    <div class="text-[10px] text-center text-gray-500">影響：腰椎曲度 (Lordosis)</div>
-                </div>
-
-
-                <!-- Frontal -->
-                <div>
-                    <div class="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>左提 (L Hike)</span>
-                        <span>右提 (R Hike)</span>
-                    </div>
-                    <input type="range" id="pelvisHike" min="-15" max="15" value="0" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-blue-400">
-                    <div class="text-[10px] text-center text-gray-500">影響：脊椎側彎 (Scoliosis)</div>
-                </div>
-
-
-                <!-- Transverse -->
-                <div>
-                    <div class="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>左旋 (L Rot)</span>
-                        <span>右旋 (R Rot)</span>
-                    </div>
-                    <input type="range" id="pelvisRot" min="-20" max="20" value="0" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-orange-400">
-                    <div class="text-[10px] text-center text-gray-500">影響：脊椎扭轉 (Torsion)</div>
-                </div>
-            </div>
-
-
-            <!-- 3. 下肢參數 -->
-            <div class="bg-teal-900/20 p-3 rounded-lg border border-teal-900/30">
-                 <label class="block text-xs font-bold text-teal-300 mb-2">下肢參數</label>
-                 <div class="mb-2">
-                    <label class="block text-[10px] mb-1 flex justify-between"><span>站距</span><span id="stanceVal">40</span></label>
-                    <input type="range" id="stanceWidth" min="20" max="60" value="40" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-teal-500">
-                 </div>
-                 <div>
-                    <label class="block text-[10px] mb-1 flex justify-between"><span>足背外開</span><span id="toeOutVal">15°</span></label>
-                    <input type="range" id="toeOutAngle" min="0" max="45" value="15" class="w-full bg-gray-600 h-1 rounded-lg appearance-none accent-orange-500">
-                 </div>
-            </div>
-
-
-            <!-- 4. 代償情境 -->
-            <div class="bg-red-900/10 p-3 rounded-lg border border-red-900/30">
-                <label class="block text-xs font-bold text-red-300 mb-1">代償情境</label>
-                <select id="scenarioSelect" class="w-full bg-gray-700 border border-gray-600 text-white text-xs rounded p-2 focus:ring-red-500">
-                    <option value="none">🟢 正常中立位</option>
-                    <option value="apt">⚠️ 骨盆前傾 (下交叉)</option>
-                    <option value="shift">⚠️ 骨盆側移 (長短腳代償)</option>
-                    <option value="twist">⚠️ 骨盆旋轉 (核心失衡)</option>
-                    <option value="butt_wink">🔴 屁股眨眼 (深蹲動態)</option>
-                </select>
-            </div>
-            
-            <div class="mt-auto border-t border-gray-700 pt-2">
-                <p id="analysisText" class="text-xs text-gray-300 leading-relaxed">
-                    系統就緒。調整滑桿觀察 3D 骨盆與脊椎的連動反應。
-                </p>
-            </div>
-        </div>
-    </div>
-
-
     <script>
-        const canvas = document.getElementById('simCanvas');
-        const ctx = canvas.getContext('2d');
-        
-        // --- Controls ---
-        const els = {
-            depth: document.getElementById('squatDepth'),
-            tilt: document.getElementById('pelvisTilt'),
-            hike: document.getElementById('pelvisHike'),
-            rot: document.getElementById('pelvisRot'),
-            stance: document.getElementById('stanceWidth'),
-            toeOut: document.getElementById('toeOutAngle'),
-            scenario: document.getElementById('scenarioSelect'),
-            resetPelvis: document.getElementById('resetPelvis')
-        };
-        
-        const displays = {
-            depth: document.getElementById('depthVal'),
-            torso: document.getElementById('torsoAngleDisplay'),
-            hip: document.getElementById('hipAngleDisplay'),
-            pStatus: document.getElementById('pelvisStatus3D'),
-            stance: document.getElementById('stanceVal'),
-            toeOut: document.getElementById('toeOutVal'),
-            analysis: document.getElementById('analysisText')
-        };
-
-
-        let state = {
-            depth: 0, 
-            tilt: 0, hike: 0, rot: 0,
-            stance: 40, toeOut: 15,
-            cameraAngle: { x: 0, y: -10 },
-            isDragging: false,
-            lastMouse: { x: 0, y: 0 },
-            scenario: 'none'
-        };
-
-
-        const BONE_LENS = {
-            femur: 110, tibia: 100, torso: 140, neck: 15
-        };
-
-
-        // --- 3D MATH UTILS ---
-        function rotateX(p, angle) {
-            const rad = angle * Math.PI / 180;
-            const c = Math.cos(rad), s = Math.sin(rad);
-            return { x: p.x, y: p.y * c - p.z * s, z: p.y * s + p.z * c };
-        }
-        function rotateY(p, angle) {
-            const rad = angle * Math.PI / 180;
-            const c = Math.cos(rad), s = Math.sin(rad);
-            return { x: p.x * c + p.z * s, y: p.y, z: -p.x * s + p.z * c };
-        }
-        function rotateZ(p, angle) {
-            const rad = angle * Math.PI / 180;
-            const c = Math.cos(rad), s = Math.sin(rad);
-            return { x: p.x * c - p.y * s, y: p.x * s + p.y * c, z: p.z };
-        }
-        function translate(p, v) { return { x: p.x + v.x, y: p.y + v.y, z: p.z + v.z }; }
-
-
-        // --- 3D PELVIS GEOMETRY (REALISTIC) ---
-        function getRealisticPelvisGeo() {
-            const w = 35; 
-            const h = 30; 
-            return {
-                sacrum_base: { x: 0, y: 0, z: 0 },
-                sacrum_tip: { x: 0, y: -15, z: -5 },
-                l_iliac_crest_post: { x: -w*0.4, y: 10, z: -5 }, 
-                l_iliac_crest_lat:  { x: -w, y: 8, z: 5 },       
-                l_asis:             { x: -w*0.7, y: 0, z: 15 },  
-                l_acetabulum:       { x: -w*0.8, y: -10, z: 5 }, 
-                l_ischium:          { x: -w*0.5, y: -25, z: -5 },
-                l_pubis:            { x: -w*0.2, y: -18, z: 12 },
-                r_iliac_crest_post: { x: w*0.4, y: 10, z: -5 },
-                r_iliac_crest_lat:  { x: w, y: 8, z: 5 },
-                r_asis:             { x: w*0.7, y: 0, z: 15 },
-                r_acetabulum:       { x: w*0.8, y: -10, z: 5 },
-                r_ischium:          { x: w*0.5, y: -25, z: -5 },
-                r_pubis:            { x: w*0.2, y: -18, z: 12 },
-                pubic_sym:          { x: 0, y: -18, z: 12 }
-            };
-        }
-
-
-        // --- 3D BEZIER FOR SPINE ---
-        function getBezierPoint3D(t, p0, p1, p2, p3) {
-            const mt = 1 - t;
-            const mt2 = mt * mt; const mt3 = mt2 * mt;
-            const t2 = t * t; const t3 = t2 * t;
-            const f0 = mt3; const f1 = 3 * mt2 * t;
-            const f2 = 3 * mt * t2; const f3 = t3;
-            return {
-                x: f0*p0.x + f1*p1.x + f2*p2.x + f3*p3.x,
-                y: f0*p0.y + f1*p1.y + f2*p2.y + f3*p3.y,
-                z: f0*p0.z + f1*p1.z + f2*p2.z + f3*p3.z
-            };
-        }
-
-
-        // --- MAIN CALCULATION ---
-        function calculateFrame() {
-            // 1. Base Mechanics
-            const maxAnkleDeg = 25;
-            const ankleRad = maxAnkleDeg * (Math.PI/180) * state.depth;
-            const sideKneeZ = Math.sin(ankleRad) * BONE_LENS.tibia;
-            const sideKneeY = Math.cos(ankleRad) * BONE_LENS.tibia;
+        // --- 輔助函數：CSV 讀取與數據轉換 ---
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            if (lines.length < 1) return null;
             
-            const maxFemurRot = Math.PI * 0.75;
-            const femurRad = state.depth * maxFemurRot;
-            const sideHipZ = sideKneeZ - Math.sin(femurRad) * BONE_LENS.femur;
-            const sideHipY = sideKneeY + Math.cos(femurRad) * BONE_LENS.femur;
+            // 使用正則表達式處理可能包含在引號內的逗號
+            const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                // 簡易解析，假設數據不會包含複雜的引號和逗號
+                const values = lines[i].split(',');
+                const row = {};
+                if (values.length !== header.length) {
+                    console.error("Row length mismatch:", lines[i]);
+                    continue;
+                }
+                for (let j = 0; j < header.length; j++) {
+                    const key = header[j];
+                    const value = values[j].trim().replace(/"/g, '');
+                    // 嘗試轉換為數字，否則保留為字串
+                    row[key] = isNaN(Number(value)) || value === '' ? value : Number(value);
+                }
+                data.push(row);
+            }
+            return data;
+        }
 
+        // --- 核心邏輯：策略回測 (移植自 Python 程式碼) ---
 
-            // Torso
-            let dx = -sideHipZ;
-            let torsoH = Math.sqrt(Math.pow(BONE_LENS.torso, 2) - dx*dx) || BONE_LENS.torso;
-            const sideShoulderY = sideHipY + torsoH;
-            const leanAngleDeg = Math.atan2(dx, torsoH) * (180/Math.PI);
-            const hipAngle = 180 - (femurRad*180/Math.PI) - leanAngleDeg;
+        /**
+         * 計算單一序列的線性迴歸斜率
+         * @param {number[]} data 數組
+         * @param {number} period 週期
+         * @returns {number} 斜率
+         */
+        function calculateSlope(data, period) {
+            if (data.length !== period) return NaN;
+            
+            // 實現 np.polyfit(range(len(x)), x, 1)[0]
+            const n = period;
+            const x = Array.from({ length: n }, (_, i) => i);
+            const y = data;
 
+            // 計算平均數
+            const meanX = x.reduce((a, b) => a + b) / n;
+            const meanY = y.reduce((a, b) => a + b) / n;
 
-            // 2. Pelvic Transform
-            let buttWink = 0;
-            if(hipAngle < 40) buttWink = (40 - hipAngle) * -1.5;
-            if(state.scenario === 'butt_wink') buttWink = -25 * state.depth;
-
-
-            const tTilt = state.tilt + buttWink;
-            const tHike = state.hike;
-            const tRot = state.rot;
-
-
-            const rawPelvis = getRealisticPelvisGeo();
-            const transformedPelvis = {};
-            const localHipCenter = { x: 0, y: -10, z: 5 };
-            const worldHipCenter = { x: 0, y: sideHipY, z: sideHipZ };
-
-
-            for (let key in rawPelvis) {
-                let p = rawPelvis[key];
-                p = { x: p.x - localHipCenter.x, y: p.y - localHipCenter.y, z: p.z - localHipCenter.z };
-                p = rotateY(p, tRot);
-                p = rotateZ(p, tHike);
-                p = rotateX(p, tTilt);
-                p = rotateX(p, leanAngleDeg);
-                p = translate(p, worldHipCenter);
-                transformedPelvis[key] = p;
+            // 計算斜率 (m)
+            let numerator = 0;
+            let denominator = 0;
+            for (let i = 0; i < n; i++) {
+                numerator += (x[i] - meanX) * (y[i] - meanY);
+                denominator += (x[i] - meanX) ** 2;
             }
 
+            // 避免除以零
+            if (denominator === 0) return NaN;
 
-            // 3. Spine
-            const sacrumPos = transformedPelvis.sacrum_base;
-            const t1Pos = {
-                x: 0,
-                y: sideShoulderY, 
-                z: worldHipCenter.z + (Math.sin(leanAngleDeg * Math.PI/180) * BONE_LENS.torso)
-            };
-            // Fix T1 Y to match arc
-            t1Pos.y = worldHipCenter.y + (Math.cos(leanAngleDeg * Math.PI/180) * BONE_LENS.torso);
+            return numerator / denominator;
+        }
+        
+        /**
+         * 計算簡單移動平均 (SMA)
+         * @param {number[]} data 數組
+         * @param {number} period 週期
+         * @returns {number[]} 包含 SMA 值的數組
+         */
+        function calculateSMA(data, period) {
+            const sma = new Array(data.length).fill(NaN);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) {
+                sum += data[i];
+                if (i >= period - 1) {
+                    sma[i] = sum / period;
+                    sum -= data[i - period + 1];
+                }
+            }
+            return sma;
+        }
 
-
-            let sacrumUp = { x: 0, y: 1, z: 0 };
-            sacrumUp = rotateY(sacrumUp, tRot);
-            sacrumUp = rotateZ(sacrumUp, tHike);
-            sacrumUp = rotateX(sacrumUp, tTilt);
-            sacrumUp = rotateX(sacrumUp, leanAngleDeg);
+        /**
+         * 執行回測的主要邏輯
+         * @param {Object[]} DF NQ 1hr K 線數據
+         * @param {Object[]} fDF 因子數據 (Faman大表)
+         * @param {Object[]} nqdDF NQ Day K 線數據
+         * @param {Object} params 回測參數
+         * @returns {Object} 包含回測結果和績效統計
+         */
+        function runBacktest(DF, fDF, nqdDF, params) {
             
-            const cp1Len = BONE_LENS.torso * 0.4;
-            const cp1 = {
-                x: sacrumPos.x + sacrumUp.x * cp1Len,
-                y: sacrumPos.y + sacrumUp.y * cp1Len,
-                z: sacrumPos.z + sacrumUp.z * cp1Len
-            };
+            const {
+                option_slope, OP_S_S, OI_slope, unapplied_slope, CS, CSL,
+                NQsma, stop_loss, high_stop_loss, downp,
+                F_unit, safetymargin, contract_value, money0 // 新增 money0
+            } = params;
 
+            // --- 1. 數據對齊和預處理 ---
+            // 由於 JavaScript 的 CSV 讀取無法直接處理時區轉換，
+            // 假設用戶上傳的數據已經經過正確的時區轉換，並包含 '日期' 和 'Time' 欄位。
 
-            let t1Down = { 
-                x: 0, 
-                y: -Math.cos(leanAngleDeg * Math.PI/180), 
-                z: -Math.sin(leanAngleDeg * Math.PI/180) 
-            };
-            const cp2Len = BONE_LENS.torso * 0.4;
-            const cp2 = {
-                x: t1Pos.x - t1Down.x * cp2Len, 
-                y: t1Pos.y + t1Down.y * cp2Len,
-                z: t1Pos.z + t1Down.z * cp2Len
-            };
+            // 確保 DF 和 fDF 有相同的 '日期' 欄位，並且 fDF 數據少於 DF
+            
+            // --- 2. 信號生成邏輯 (in_signal 函式核心) ---
 
+            const fDFProcessed = fDF.map(row => ({ ...row })); // 複製一份，避免修改原始數據
+            
+            // 提取所需的指標數據
+            const op_data = fDFProcessed.map(row => row["臺指選擇權_買權_外資_未平倉餘額_買賣差額_契約金額"] || 0);
+            const oi_data = fDFProcessed.map(row => row["臺股期貨_總未平倉餘額多空淨額"] || 0);
+            const ua_data = fDFProcessed.map(row => row["臺股期貨(TX+MTX/4+TMF/20)_當月未沖銷部位數"] || 0);
+            const financing_ratio = fDFProcessed.map(row => row["融資維持率"] || 0);
+            
+            // 2.1 計算斜率
+            for (let i = 0; i < fDFProcessed.length; i++) {
+                // 選擇權買權斜率
+                const op_window = op_data.slice(i - option_slope + 1, i + 1);
+                fDFProcessed[i].op_slope = calculateSlope(op_window, option_slope);
 
-            const spine = [];
-            for(let i=0; i<=17; i++) spine.push(getBezierPoint3D(i/17, sacrumPos, cp1, cp2, t1Pos));
+                // 總未平倉餘額斜率
+                const oi_window = oi_data.slice(i - OI_slope + 1, i + 1);
+                fDFProcessed[i].oi_slope = calculateSlope(oi_window, OI_slope);
 
+                // 當月未沖銷斜率 (未使用在進場訊號中，但原始碼有計算)
+                // const ua_window = ua_data.slice(i - unapplied_slope + 1, i + 1);
+                // fDFProcessed[i].ua_slope = calculateSlope(ua_window, unapplied_slope);
+            }
+            
+            // 2.2 CS 過濾 (Condition SMA)
+            if (CS) {
+                // 找出 min_op, min_oi, min_ua (為了 "normal_" 處理)
+                const min_op = Math.min(...op_data.filter(n => typeof n === 'number'));
+                const min_oi = Math.min(...oi_data.filter(n => typeof n === 'number'));
+                // const min_ua = Math.min(...ua_data.filter(n => typeof n === 'number')); // ua 未使用在訊號中
 
-            // 4. Legs
-            const halfStance = state.stance / 2;
-            const toeRad = state.toeOut * Math.PI / 180;
-            const ankles = { L: { x: -halfStance, y: 0, z: 0 }, R: { x: halfStance, y: 0, z: 0 } };
-            const hips = { L: transformedPelvis.l_acetabulum, R: transformedPelvis.r_acetabulum };
-            const knees = {};
-            ['L', 'R'].forEach(side => {
-                const dir = side==='L' ? -1 : 1;
-                const kX = ankles[side].x + (Math.sin(toeRad) * sideKneeZ * 1.2 * dir);
-                knees[side] = { x: kX, y: sideKneeY, z: sideKneeZ };
+                const normal_op = op_data.map(n => n + Math.abs(min_op));
+                const normal_oi = oi_data.map(n => n + Math.abs(min_oi));
+
+                const sma_op = calculateSMA(normal_op, CSL);
+                const sma_oi = calculateSMA(normal_oi, CSL);
+                
+                for (let i = 0; i < fDFProcessed.length; i++) {
+                    const normal_op_i = normal_op[i];
+                    fDFProcessed[i].CS_OP = (normal_op_i > sma_op[i]) ? 1 : 0;
+                    // fDFProcessed[i].CS_OI = (normal_oi[i] > sma_oi[i]) ? 1 : 0; // OI 未使用在訊號 2 中
+                }
+            } else {
+                for (let i = 0; i < fDFProcessed.length; i++) {
+                    fDFProcessed[i].CS_OP = 1;
+                    // fDFProcessed[i].CS_OI = 1;
+                }
+            }
+
+            // 2.3 NQ 日 K 均線過濾 (NQsma)
+            const nqDayClose = nqdDF.map(row => row["Close"] || 0);
+            let indaylist = [];
+            if (NQsma > 0) {
+                const nqDaySMA = calculateSMA(nqDayClose, NQsma);
+                for (let i = 0; i < nqdDF.length - 1; i++) {
+                    // if nqdDF.loc[nqdi, "Close"] > nqdDF.loc[nqdi, "SMA"]:
+                    if (nqDayClose[i] > nqDaySMA[i]) {
+                        // indaylist.append(nqdDF.loc[nqdi+1, "日期"])
+                        indaylist.push(nqdDF[i + 1]["日期"]);
+                    }
+                }
+            } else {
+                // NQsma = 0 意味著不需要過濾 (允許所有日期)
+                for (let i = 0; i < nqdDF.length - 1; i++) {
+                    indaylist.push(nqdDF[i + 1]["日期"]);
+                }
+            }
+
+            // 2.4 生成進場訊號 (以日為基礎)
+            for (let i = 0; i < fDFProcessed.length; i++) {
+                // fDF: 日數據
+                // 進場訊號_1 = 1 if op_slope > OP_S_S and CS_OP == 1 else 0
+                fDFProcessed[i].signal_1 = (fDFProcessed[i].op_slope > OP_S_S && fDFProcessed[i].CS_OP === 1) ? 1 : 0;
+                // 進場訊號_2 = 1 if oi_slope > 0 else 0
+                fDFProcessed[i].signal_2 = (fDFProcessed[i].oi_slope > 0) ? 1 : 0;
+                // 進場訊號_4 = 1 if 融資維持率 < 160 else 0
+                fDFProcessed[i].signal_4 = (financing_ratio[i] < 160) ? 1 : 0;
+            }
+
+            // 將日訊號映射到 1 小時 K 線數據 (DF)
+            const DF_final = DF.map(row => ({ ...row, signal_1: 0, signal_2: 0, signal_4: 0 }));
+            const dateToSignals = new Map();
+            fDFProcessed.forEach(row => {
+                dateToSignals.set(row["日期"], {
+                    s1: row.signal_1,
+                    s2: row.signal_2,
+                    s4: row.signal_4
+                });
             });
 
+            const DF_final_map = DF_final.map(row => {
+                const signals = dateToSignals.get(row["日期"]);
+                if (signals && indaylist.includes(row["日期"])) {
+                    row.signal_1 = signals.s1;
+                    row.signal_2 = signals.s2;
+                    row.signal_4 = signals.s4;
+                }
+                return row;
+            });
+            
+            // --- 3. 回測邏輯 (bt_ht_slope_2 函式核心) ---
+            
+            const sl_ratio = stop_loss / 100;       // 底部止損%
+            const sl_high_ratio = high_stop_loss / 100; // 最大回撤%
+            const fee = 1.25;                       // 一買一賣所有手續費和稅
+            // const money0 = F_unit * 5;           // <-- 已從參數讀取
+            
+            // 3.1 400 期 SMA 過濾
+            const hrClose = DF_final_map.map(row => row["Close"] || 0);
+            const sma400 = calculateSMA(hrClose, 400);
+
+            // 3.2 日 K 均線 (用於止損)
+            let nqDaySMA_for_bt = [];
+            if (NQsma > 0) {
+                 nqDaySMA_for_bt = calculateSMA(nqDayClose, NQsma);
+            }
+            
+            // 3.3 回測狀態
+            let recotd1 = {
+                money: money0, 
+                F_Hold: [], // 陣列儲存持倉的進場價格 (Open Price)
+                F_Value: 0, 
+                Account_Value: money0
+            };
+            const record0 = { Time: [], Account_Value: [], Profit_Ratio: [] };
+            let maxAccountValue = money0; // 用於計算最大回撤
+            
+            const start_index = 460; // 從 460 開始（確保 400 SMA 和 460 K 線高點計算完整）
+            
+            for (let i = start_index; i < DF_final_map.length; i++) {
+                const current = DF_final_map[i];
+                const prev = DF_final_map[i - 1];
+                const thetime = current["Time"];
+                const thedate = thetime.split(" ")[0];
+                const time_of_day = thetime.split(" ")[1];
+
+                let smaprice = NaN;
+                // 找到前一天的日K數據 (用於日 K 均線止損)
+                let checki = -1;
+                for(let k = nqdDF.length - 1; k >= 0; k--){
+                    if(nqdDF[k]["日期"] === thedate && k > 0){
+                        checki = k - 1;
+                        break;
+                    }
+                }
+
+                if (checki !== -1) {
+                    // side = 1 if dayDF.loc[checki, "Close"] > dayDF.loc[checki, "SMA"] else 0
+                    // smaprice = dayDF.loc[checki, "SMA"]
+                    if (NQsma > 0) {
+                         smaprice = nqDaySMA_for_bt[checki];
+                    } else {
+                         // 如果 NQsma = 0，則日K均線不作為止損條件 (smaprice = 0, 使條件難以滿足)
+                         smaprice = 0; 
+                    }
+                } 
+                // else: // 保持前一天的 smaprice，但這裡簡化為 NaN，因為我們只檢查 i > 460
+                
+                // 3.4 準備出場價
+                let last_open = 0;
+                // 找前一天的 09:00:00 Open
+                for(let j = 1; j < 60; j++) {
+                    if (DF_final_map[i - j] && DF_final_map[i-j]["Time"].split(" ")[0] !== thedate && DF_final_map[i-j]["Time"].split(" ")[1] === "09:00:00") {
+                        last_open = DF_final_map[i-j]["Open"];
+                        break;
+                    }
+                }
+                
+                const out_price = last_open * (1 - sl_ratio); // 出場價1 (底部止損)
+                
+                // 找到過去 460 根 K 線的高點
+                let maxHigh = -Infinity;
+                for(let k = i - 460; k < i; k++) {
+                    if (DF_final_map[k] && DF_final_map[k]["High"] > maxHigh) {
+                        maxHigh = DF_final_map[k]["High"];
+                    }
+                }
+                const high_stop_price = maxHigh * (1 - sl_high_ratio); // 出場價2 (最大回撤止損)
+                const sma_down_price = smaprice * (1 - (downp / 100)); // 出場價3 (日 K 均線止損)
+                
+                const min_stop_price = Math.min(out_price, high_stop_price, sma_down_price);
+
+                // --- Open 的時候要做什麼事 (檢查出場) ---
+                if (recotd1.F_Hold.length > 0) {
+                    // DF.loc[i-1, "Close"] < max([out_price, high_stop_price])
+                    if (prev["Close"] < min_stop_price) {
+                        let total_profit = 0;
+                        const exitPrice = current["Open"];
+                        recotd1.F_Hold.forEach(entryPrice => {
+                            // ((DF.loc[i, "Open"]-f)*contract_value - fee)
+                            total_profit += ((exitPrice - entryPrice) * contract_value - fee);
+                        });
+                        recotd1.money += total_profit;
+                        recotd1.F_Hold = [];
+                        recotd1.F_Value = 0;
+                        recotd1.Account_Value = recotd1.money + recotd1.F_Value;
+                    }
+                }
+
+                // --- Open 的時候要做什麼事 (檢查進場) ---
+                let buynum = 0;
+                // maCheck = True if DF.loc[i-1,"Close"] > DF.loc[i-1, "SMA_400"] else False
+                const maCheck = prev["Close"] > sma400[i - 1]; // SMA400 在 i-1 的值
+                
+                if (time_of_day === "06:00:00" && maCheck) {
+                    // 檢查進場訊號 (1, 2, 4)
+                    if (current.signal_1 === 1) buynum++;
+                    if (current.signal_2 === 1) buynum++;
+                    if (current.signal_4 === 1) buynum++;
+                }
+
+                if (buynum > 0) {
+                    const availableToBuy = Math.floor((recotd1.money - recotd1.F_Hold.length * F_unit * safetymargin) / (F_unit * safetymargin));
+                    
+                    const contractsToBuy = Math.min(buynum, availableToBuy);
+
+                    for (let b_count = 0; b_count < contractsToBuy; b_count++) {
+                        recotd1.F_Hold.push(current["Open"]);
+                    }
+                    
+                    // 更新 F_Value 和 Account_Value (用當前 Open 價計算)
+                    let f_value = 0;
+                    const openPrice = current["Open"];
+                    recotd1.F_Hold.forEach(entryPrice => {
+                        f_value += ((openPrice - entryPrice) * contract_value - fee);
+                    });
+                    recotd1.F_Value = f_value;
+                    recotd1.Account_Value = recotd1.money + recotd1.F_Value;
+                }
+                
+                // --- Close 的時候要做什麼事 (計算帳戶價值) ---
+                let f_value_close = 0;
+                const closePrice = current["Close"];
+                recotd1.F_Hold.forEach(entryPrice => {
+                    // ((DF.loc[i, "Close"]-f)*contract_value - fee)
+                    f_value_close += ((closePrice - entryPrice) * contract_value - fee);
+                });
+                recotd1.F_Value = f_value_close;
+                recotd1.Account_Value = recotd1.money + recotd1.F_Value;
+
+                // 更新最大帳戶價值 (用於最大回撤計算)
+                if (recotd1.Account_Value > maxAccountValue) {
+                    maxAccountValue = recotd1.Account_Value;
+                }
+
+                // 換天的時候紀錄帳戶
+                if (i === DF_final_map.length - 1 || thedate !== DF_final_map[i + 1]["Time"].split(" ")[0]) {
+                    // record0 = {"Time":[],"Account_Value":[],"Rest_Money_buy":[]}
+                    record0.Time.push(thedate);
+                    record0.Account_Value.push(recotd1.Account_Value);
+                    const profitRatio = (recotd1.Account_Value - money0) / money0;
+                    record0.Profit_Ratio.push(profitRatio);
+                }
+            }
+
+            // --- 4. 績效統計 ---
+            const finalValue = record0.Account_Value.length > 0 ? record0.Account_Value[record0.Account_Value.length - 1] : money0;
+            const finalProfit = finalValue - money0;
+            const totalReturn = (finalProfit / money0) * 100;
+            
+            let drawdown = 0;
+            let peak = money0;
+            for (const value of record0.Account_Value) {
+                peak = Math.max(peak, value);
+                const currentDrawdown = (peak - value) / peak;
+                drawdown = Math.max(drawdown, currentDrawdown);
+            }
+            const maxDrawdown = drawdown * 100;
 
             return {
-                pelvis: transformedPelvis,
-                spine: spine,
-                ankles, knees, hips,
-                t1: t1Pos,
-                meta: {
-                    lean: Math.round(leanAngleDeg),
-                    hipAngle: Math.round(hipAngle),
-                    status: `T:${Math.round(tTilt)} H:${Math.round(tHike)} R:${Math.round(tRot)}`
+                equityCurve: record0,
+                money0: money0,
+                stats: {
+                    totalReturn: totalReturn.toFixed(2) + '%',
+                    finalValue: finalValue.toFixed(2),
+                    maxDrawdown: maxDrawdown.toFixed(2) + '%',
+                    // 交易次數：實際計算進場條件被滿足且有資金買入的次數
+                    tradeCount: DF_final_map.filter(row => row.signal_1 + row.signal_2 + row.signal_4 > 0 && row["Time"].split(" ")[1] === "06:00:00" && hrClose[DF_final_map.indexOf(row) - 1] > sma400[DF_final_map.indexOf(row) - 1]).length 
                 }
             };
         }
 
+        // --- 介面控制與事件處理 ---
 
-        // --- DRAWING ---
-        function draw() {
-            const w = canvas.width;
-            const h = canvas.height;
-            ctx.clearRect(0, 0, w, h);
-            const data = calculateFrame();
-            
-            displays.torso.innerText = data.meta.lean + "°";
-            displays.hip.innerText = data.meta.hipAngle + "°";
-            displays.pStatus.innerText = data.meta.status;
+        let hDF_data = [];
+        let fDF_data = [];
+        let nqdDF_data = [];
+        let filesReady = false;
 
+        function handleFileUpload(event, fileType) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
 
-            let analysis = "";
-            if (Math.abs(state.hike) > 5) analysis = "🟠 **脊椎側彎代償**：骨盆高低導致脊椎必須側彎(S型)以維持頭部重心平衡。";
-            else if (Math.abs(state.rot) > 5) analysis = "🟠 **脊椎扭轉**：骨盆旋轉導致腰椎產生扭力，這常是單邊腰痛的主因。";
-            else if (state.tilt < -10) analysis = "🔴 **腰椎屈曲**：骨盆後傾導致腰椎前凸消失，椎間盤壓力極大。";
-            else analysis = "骨盆與脊椎排列良好。試著旋轉視角觀察脊椎每一節的排列。";
-            displays.analysis.innerHTML = analysis;
+            reader.onload = function (e) {
+                const data = parseCSV(e.target.result);
+                if (!data || data.length === 0) {
+                    showModal('檔案錯誤', 'CSV 檔案解析失敗或為空。');
+                    return;
+                }
 
+                switch (fileType) {
+                    case 'hDF': hDF_data = data; break;
+                    case 'fDF': fDF_data = data; break;
+                    case 'nqdDF': nqdDF_data = data; break;
+                }
 
-            draw2D(data, w * 0.25, h);
-            draw3D(data, w * 0.625, h);
-
-
-            ctx.beginPath(); ctx.moveTo(w*0.25, 20); ctx.lineTo(w*0.25, h-20);
-            ctx.strokeStyle = "#4b5563"; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
-        }
-
-
-        function draw2D(data, cx, h) {
-            const scale = 1.5;
-            const ground = h * 0.85;
-            const map = (z, y) => ({ x: cx + z * scale, y: ground - y * scale });
-
-
-            ctx.strokeStyle = "#4b5563"; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(cx-50, ground); ctx.lineTo(cx+100, ground); ctx.stroke();
-
-
-            ctx.strokeStyle = "#a855f7"; ctx.lineWidth = 5;
-            ctx.beginPath();
-            data.spine.forEach((p, i) => {
-                const pt = map(p.z, p.y);
-                if(i===0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
-            });
-            ctx.stroke();
-
-
-            const hip = map(data.hips.L.z, data.hips.L.y);
-            const knee = map(data.knees.L.z, data.knees.L.y);
-            const ankle = map(data.ankles.L.z, data.ankles.L.y);
-            
-            ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 6;
-            ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(knee.x, knee.y); ctx.stroke();
-            ctx.strokeStyle = "#f97316";
-            ctx.beginPath(); ctx.moveTo(knee.x, knee.y); ctx.lineTo(ankle.x, ankle.y); ctx.stroke();
-        }
-
-
-        function draw3D(data, cx, h) {
-            const scale = 3.5;
-            const ground = h * 0.7;
-            const camX = state.cameraAngle.y; 
-            const camY = state.cameraAngle.x;
-
-
-            const project = (p) => {
-                const centerY = 50;
-                let x = p.x, y = p.y - centerY, z = p.z;
-                let p1 = rotateY({x,y,z}, camY);
-                p1 = rotateX(p1, camX);
-                const fov = 500; const dist = 600;
-                const s = fov / (dist - p1.z);
-                return { x: cx + p1.x * scale * s, y: ground - (p1.y + centerY) * scale * s, z: p1.z };
+                document.getElementById(`${fileType}-status`).textContent = `已載入 ${data.length} 筆資料`;
+                checkFilesReady();
             };
 
+            reader.onerror = function () {
+                showModal('檔案錯誤', '檔案讀取錯誤。');
+            };
 
-            ctx.strokeStyle = "#374151"; ctx.lineWidth = 1;
-            for(let i=-100; i<=100; i+=50) {
-                const p1 = project({x:i,y:0,z:-100}), p2 = project({x:i,y:0,z:100});
-                ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-                const p3 = project({x:-100,y:0,z:i}), p4 = project({x:100,y:0,z:i});
-                ctx.beginPath(); ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.stroke();
+            if (file) {
+                reader.readAsText(file, 'UTF-8');
+            }
+        }
+
+        function checkFilesReady() {
+            filesReady = hDF_data.length > 0 && fDF_data.length > 0 && nqdDF_data.length > 0;
+            const button = document.getElementById('run-backtest-btn');
+            button.disabled = !filesReady;
+            button.textContent = filesReady ? '執行回測' : '請上傳所有檔案';
+        }
+
+        function getParameters() {
+            // 讀取所有參數欄位的值
+            const params = {
+                // 信號參數
+                option_slope: parseInt(document.getElementById('option_slope').value),
+                OP_S_S: parseFloat(document.getElementById('OP_S_S').value),
+                OI_slope: parseInt(document.getElementById('OI_slope').value),
+                unapplied_slope: parseInt(document.getElementById('unapplied_slope').value),
+                CS: document.getElementById('CS').value === 'True',
+                CSL: parseInt(document.getElementById('CSL').value),
+                // 回測參數
+                NQsma: parseInt(document.getElementById('NQsma').value),
+                stop_loss: parseFloat(document.getElementById('stop_loss').value),
+                high_stop_loss: parseFloat(document.getElementById('high_stop_loss').value),
+                downp: parseFloat(document.getElementById('downp').value),
+                // 資金與合約參數
+                money0: parseFloat(document.getElementById('money0').value), // 新增起始資金
+                F_unit: parseFloat(document.getElementById('F_unit').value),
+                safetymargin: parseFloat(document.getElementById('safetymargin').value),
+                contract_value: parseFloat(document.getElementById('contract_value').value),
+            };
+            return params;
+        }
+
+        function displayResults(results) {
+            const stats = results.stats;
+            const curve = results.equityCurve;
+            const money0 = results.money0;
+            
+            // 1. 顯示績效統計
+            document.getElementById('stat-total-return').textContent = stats.totalReturn;
+            document.getElementById('stat-final-value').textContent = stats.finalValue;
+            document.getElementById('stat-max-drawdown').textContent = stats.maxDrawdown;
+            document.getElementById('stat-trade-count').textContent = stats.tradeCount;
+            document.getElementById('stats-output').classList.remove('hidden');
+
+            // 2. 繪製基金曲線
+            const traceEquity = {
+                x: curve.Time,
+                y: curve.Account_Value,
+                mode: 'lines',
+                name: '淨值曲線',
+                line: { color: '#3b82f6' }
+            };
+            
+            const traceInitial = {
+                x: [curve.Time[0], curve.Time[curve.Time.length - 1]],
+                y: [money0, money0],
+                mode: 'lines',
+                name: '起始資金',
+                line: { dash: 'dot', color: '#ef4444' }
+            };
+
+            const layout = {
+                title: '回測淨值曲線',
+                xaxis: { 
+                    title: '日期', 
+                    tickformat: '%Y-%m-%d',
+                    type: 'date'
+                },
+                yaxis: { title: '帳戶價值' },
+                margin: { t: 40, b: 60, l: 60, r: 20 },
+                hovermode: 'x unified',
+                autosize: true,
+                paper_bgcolor: '#f9fafb',
+                plot_bgcolor: '#ffffff',
+            };
+
+            Plotly.newPlot('equity-chart', [traceEquity, traceInitial], layout, {responsive: true});
+            document.getElementById('chart-output').classList.remove('hidden');
+        }
+
+        async function runBacktestHandler() {
+            if (!filesReady) {
+                showModal('檔案錯誤', '請先上傳所有三個必要的 CSV 檔案！');
+                return;
             }
 
+            const btn = document.getElementById('run-backtest-btn');
+            btn.disabled = true;
+            btn.textContent = '回測進行中...';
 
-            const p = {};
-            for(let k in data.pelvis) p[k] = project(data.pelvis[k]);
-            
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = "#ec4899";
-            ctx.fillStyle = "rgba(236, 72, 153, 0.4)";
-
-
-            // Left Ilium
-            ctx.beginPath();
-            ctx.moveTo(p.sacrum_base.x, p.sacrum_base.y);
-            ctx.lineTo(p.l_iliac_crest_post.x, p.l_iliac_crest_post.y);
-            ctx.lineTo(p.l_iliac_crest_lat.x, p.l_iliac_crest_lat.y);
-            ctx.lineTo(p.l_asis.x, p.l_asis.y);
-            ctx.lineTo(p.l_acetabulum.x, p.l_acetabulum.y);
-            ctx.lineTo(p.l_pubis.x, p.l_pubis.y);
-            ctx.lineTo(p.pubic_sym.x, p.pubic_sym.y);
-            ctx.lineTo(p.l_ischium.x, p.l_ischium.y);
-            ctx.lineTo(p.sacrum_tip.x, p.sacrum_tip.y);
-            ctx.lineTo(p.sacrum_base.x, p.sacrum_base.y);
-            ctx.fill(); ctx.stroke();
-
-
-            // Right Ilium
-            ctx.beginPath();
-            ctx.moveTo(p.sacrum_base.x, p.sacrum_base.y);
-            ctx.lineTo(p.r_iliac_crest_post.x, p.r_iliac_crest_post.y);
-            ctx.lineTo(p.r_iliac_crest_lat.x, p.r_iliac_crest_lat.y);
-            ctx.lineTo(p.r_asis.x, p.r_asis.y);
-            ctx.lineTo(p.r_acetabulum.x, p.r_acetabulum.y);
-            ctx.lineTo(p.r_pubis.x, p.r_pubis.y);
-            ctx.lineTo(p.pubic_sym.x, p.pubic_sym.y);
-            ctx.lineTo(p.r_ischium.x, p.r_ischium.y);
-            ctx.lineTo(p.sacrum_tip.x, p.sacrum_tip.y);
-            ctx.lineTo(p.sacrum_base.x, p.sacrum_base.y);
-            ctx.fill(); ctx.stroke();
-            
-            ctx.fillStyle = "rgba(236, 72, 153, 0.7)";
-            ctx.beginPath();
-            ctx.moveTo(p.sacrum_base.x, p.sacrum_base.y);
-            ctx.lineTo(p.l_iliac_crest_post.x, p.l_iliac_crest_post.y);
-            ctx.lineTo(p.sacrum_tip.x, p.sacrum_tip.y);
-            ctx.lineTo(p.r_iliac_crest_post.x, p.r_iliac_crest_post.y);
-            ctx.fill();
-
-
-            data.spine.forEach((v, i) => {
-                const vp = project(v);
-                const size = i < 5 ? 5 : 4; 
-                ctx.fillStyle = i < 5 ? "#a855f7" : "#8b5cf6"; 
-                ctx.strokeStyle = "#e9d5ff";
-                ctx.beginPath();
-                ctx.rect(vp.x - size, vp.y - size/2, size*2, size);
-                ctx.fill(); ctx.stroke();
-            });
-
-
-            ['L', 'R'].forEach(s => {
-                const a = project(data.ankles[s]);
-                const k = project(data.knees[s]);
-                const h = project(data.hips[s]);
-
-
-                ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 6;
-                ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.lineTo(k.x, k.y); ctx.stroke();
-                ctx.strokeStyle = "#f97316";
-                ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(a.x, a.y); ctx.stroke();
+            try {
+                const params = getParameters();
+                console.log('Running backtest with parameters:', params);
                 
-                ctx.fillStyle = "white";
-                ctx.beginPath(); ctx.arc(k.x, k.y, 4, 0, Math.PI*2); ctx.fill();
-                ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI*2); ctx.fill();
-            });
-            
-            const t1 = project(data.t1);
-            ctx.fillStyle = "#e5e7eb";
-            ctx.beginPath(); ctx.arc(t1.x, t1.y - 15, 12, 0, Math.PI*2); ctx.fill();
+                // ** 修正：強制清除舊圖表，確保每次繪製都是乾淨的 **
+                const chartDiv = document.getElementById('equity-chart');
+                if (window.Plotly && chartDiv) {
+                    Plotly.purge('equity-chart'); 
+                    chartDiv.innerHTML = ''; // 積極清空 DOM 內容
+                }
+                
+                // 執行核心回測邏輯
+                const results = runBacktest(hDF_data, fDF_data, nqdDF_data, params);
+                
+                // 顯示結果
+                displayResults(results);
+
+            } catch (error) {
+                console.error("Backtest Failed:", error);
+                // 顯示自定義模態框 (替代 alert)
+                showModal('回測失敗', '執行回測時發生錯誤。請檢查您的檔案格式和輸入的參數是否正確。' + (error.message || '未知錯誤。'));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '執行回測';
+            }
+        }
+        
+        function showModal(title, message) {
+            const modal = document.getElementById('custom-modal');
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            modal.classList.remove('hidden');
         }
 
-
-        // --- SNAPSHOT FUNCTION ---
-        function saveSnapshot() {
-            const link = document.createElement('a');
-            link.download = 'squat_model_3d_snapshot.png';
-            link.href = canvas.toDataURL('image/png');
-            link.click();
+        function closeModal() {
+            document.getElementById('custom-modal').classList.add('hidden');
         }
 
-
-        // --- EVENTS ---
-        canvas.addEventListener('mousedown', e => { state.isDragging = true; state.lastMouse = {x:e.clientX, y:e.clientY}; });
-        window.addEventListener('mousemove', e => {
-            if(!state.isDragging) return;
-            state.cameraAngle.x += (e.clientX - state.lastMouse.x)*0.5;
-            state.cameraAngle.y = Math.max(-45, Math.min(45, state.cameraAngle.y + (e.clientY - state.lastMouse.y)*0.5));
-            state.lastMouse = {x:e.clientX, y:e.clientY};
-            draw();
-        });
-        window.addEventListener('mouseup', () => state.isDragging = false);
-
-
-        const inputs = ['depth', 'tilt', 'hike', 'rot', 'stance', 'toeOut'];
-        inputs.forEach(k => els[k] && els[k].addEventListener('input', e => {
-            state[k] = parseFloat(e.target.value);
-            if(k==='depth') state.depth = e.target.value/100;
-            draw();
-        }));
-        els.resetPelvis.addEventListener('click', () => {
-            state.tilt=0; state.hike=0; state.rot=0;
-            els.tilt.value=0; els.hike.value=0; els.rot.value=0;
-            draw();
-        });
-        els.scenario.addEventListener('change', e => {
-            state.scenario = e.target.value;
-            if(state.scenario === 'apt') { state.tilt = 20; els.tilt.value = 20; }
-            else if(state.scenario === 'shift') { state.hike = 10; els.hike.value = 10; }
-            else if(state.scenario === 'twist') { state.rot = 15; els.rot.value = 15; }
-            else { state.tilt=0; state.hike=0; state.rot=0; els.tilt.value=0; els.hike.value=0; els.rot.value=0; }
-            draw();
-        });
-
-
-        function resize() { canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight; draw(); }
-        window.addEventListener('resize', resize);
-        resize();
-
-
+        // 初始化
+        window.onload = function() {
+            checkFilesReady();
+            document.getElementById('run-backtest-btn').addEventListener('click', runBacktestHandler);
+            // 檔案上傳事件監聽
+            document.getElementById('hDF-upload').addEventListener('change', (e) => handleFileUpload(e, 'hDF'));
+            document.getElementById('fDF-upload').addEventListener('change', (e) => handleFileUpload(e, 'fDF'));
+            document.getElementById('nqdDF-upload').addEventListener('change', (e) => handleFileUpload(e, 'nqdDF'));
+            // 模態框關閉
+            document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+            document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+        };
     </script>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">量化交易策略回測介面 (單參數)</h1>
+
+        <!-- 檔案上傳區 -->
+        <div class="card p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">1. 數據準備 (CSV 上傳)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <!-- NQ 1 Hr K 線數據 (主數據) -->
+                <div class="input-group">
+                    <label class="block text-sm mb-1">主數據：NQ 1Hr K 線 (DF)</label>
+                    <label for="hDF-upload" class="file-upload-label">
+                        點擊上傳 (含 Close, Open, High, Low, 日期, Time)
+                        <input type="file" id="hDF-upload" class="hidden" accept=".csv">
+                    </label>
+                    <p id="hDF-status" class="text-xs mt-1 text-gray-500">未載入</p>
+                </div>
+                
+                <!-- 因子數據 (Faman大表) -->
+                <div class="input-group">
+                    <label class="block text-sm mb-1">因子數據：Faman大表 (fDF)</label>
+                    <label for="fDF-upload" class="file-upload-label">
+                        點擊上傳 (含斜率指標, 融資維持率等)
+                        <input type="file" id="fDF-upload" class="hidden" accept=".csv">
+                    </label>
+                    <p id="fDF-status" class="text-xs mt-1 text-gray-500">未載入</p>
+                </div>
+                
+                <!-- NQ Day K 線數據 -->
+                <div class="input-group">
+                    <label class="block text-sm mb-1">輔助數據：NQ Day K 線 (nqdDF)</label>
+                    <label for="nqdDF-upload" class="file-upload-label">
+                        點擊上傳 (含 Close, 用於日 K 均線過濾)
+                        <input type="file" id="nqdDF-upload" class="hidden" accept=".csv">
+                    </label>
+                    <p id="nqdDF-status" class="text-xs mt-1 text-gray-500">未載入</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 參數輸入區 -->
+        <div class="card p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">2. 策略與資金參數設定</h2>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                <!-- 資金與合約參數 -->
+                <div class="lg:col-span-4 border-b pb-4 mb-4">
+                    <h3 class="text-lg font-medium text-blue-600 mb-2">合約與資金參數</h3>
+                    <div class="grid grid-cols-4 gap-4">
+                        <!-- 新增起始資金 -->
+                        <div class="input-group">
+                            <label for="money0" class="text-xs">起始資金 (money0)</label>
+                            <input type="number" id="money0" value="12210" step="1000" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="F_unit" class="text-xs">每口保證金 (F_unit)</label>
+                            <input type="number" id="F_unit" value="2442" step="1" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="safetymargin" class="text-xs">安全邊際 (safetymargin)</label>
+                            <input type="number" id="safetymargin" value="1.9" step="0.1" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="contract_value" class="text-xs">MNQ 合約規格 (contract_value)</label>
+                            <input type="number" id="contract_value" value="2" step="1" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 斜率計算參數 (in_signal) -->
+                <div class="lg:col-span-2">
+                    <h3 class="text-lg font-medium text-green-600 mb-2">A. 進場訊號 (斜率/門檻)</h3>
+                    <div class="space-y-3">
+                        <div class="input-group">
+                            <label for="option_slope" class="text-xs">選擇權斜率天數 (option_slope)</label>
+                            <input type="number" id="option_slope" value="13" step="1" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="OP_S_S" class="text-xs">選擇權斜率進場門檻值 (OP_S_S)</label>
+                            <input type="number" id="OP_S_S" value="5000" step="1000" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="OI_slope" class="text-xs">總未平倉餘額斜率天數 (OI_slope)</label>
+                            <input type="number" id="OI_slope" value="23" step="1" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="unapplied_slope" class="text-xs">當月未沖銷斜率天數 (unapplied_slope)</label>
+                            <input type="number" id="unapplied_slope" value="23" step="1" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 過濾與回測參數 (bt_ht_slope_2) -->
+                <div class="lg:col-span-2">
+                    <h3 class="text-lg font-medium text-yellow-600 mb-2">B. 均線過濾與出場參數</h3>
+                    <div class="space-y-3">
+                        <div class="input-group">
+                            <label for="CS" class="text-xs">使用 CS 均線過濾 (CS)</label>
+                            <select id="CS">
+                                <option value="True">True</option>
+                                <option value="False">False</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="CSL" class="text-xs">CS 過濾 SMA 週期 (CSL)</label>
+                            <input type="number" id="CSL" value="11" step="1" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="NQsma" class="text-xs">NQ 日 K 均線週期 (NQsma)</label>
+                            <input type="number" id="NQsma" value="13" step="1" required>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="input-group col-span-1">
+                                <label for="stop_loss" class="text-xs">底部止損 % (SL)</label>
+                                <input type="number" id="stop_loss" value="11" step="1" required>
+                            </div>
+                            <div class="input-group col-span-1">
+                                <label for="high_stop_loss" class="text-xs">最大回撤止損 % (HS)</label>
+                                <input type="number" id="high_stop_loss" value="9" step="1" required>
+                            </div>
+                            <div class="input-group col-span-1">
+                                <label for="downp" class="text-xs">均線止損 % (DOWN)</label>
+                                <input type="number" id="downp" value="7" step="1" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 執行按鈕 -->
+        <div class="mb-8 text-center">
+            <button id="run-backtest-btn" class="btn-primary w-full md:w-1/3" disabled>
+                請上傳所有檔案
+            </button>
+        </div>
+
+        <!-- 結果顯示區 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- 績效統計 -->
+            <div id="stats-output" class="card p-6 lg:col-span-1 hidden">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">3. 績效統計</h2>
+                <div class="space-y-3">
+                    <div class="result-box">
+                        <p class="text-sm text-gray-500">總報酬率</p>
+                        <p id="stat-total-return" class="text-2xl font-bold text-green-600">N/A</p>
+                    </div>
+                    <div class="result-box">
+                        <p class="text-sm text-gray-500">最終帳戶價值</p>
+                        <p id="stat-final-value" class="text-xl font-bold text-gray-800">N/A</p>
+                    </div>
+                    <div class="result-box">
+                        <p class="text-sm text-gray-500">最大回撤 (Max Drawdown)</p>
+                        <p id="stat-max-drawdown" class="text-xl font-bold text-red-600">N/A</p>
+                    </div>
+                    <div class="result-box">
+                        <p class="text-sm text-gray-500">交易次數 (粗略估計)</p>
+                        <p id="stat-trade-count" class="text-xl font-bold text-gray-800">N/A</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 淨值曲線圖表 -->
+            <div id="chart-output" class="card p-6 lg:col-span-2 hidden">
+                <div id="equity-chart" class="w-full h-96"></div>
+            </div>
+
+        </div>
+    </div>
+    
+    <!-- 模態框 (替代 Alert) -->
+    <div id="custom-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <!-- 背景遮罩 -->
+            <div id="modal-backdrop" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+
+            <!-- 模態框容器 -->
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <!-- Icon -->
+                            <svg class="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                            <h3 id="modal-title" class="text-lg leading-6 font-medium text-gray-900">
+                                錯誤提示
+                            </h3>
+                            <div class="mt-2">
+                                <p id="modal-message" class="text-sm text-gray-500">
+                                    這裡將顯示錯誤訊息。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" id="modal-close-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        確認
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
