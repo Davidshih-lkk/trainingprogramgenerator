@@ -3,803 +3,669 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>量化交易策略回測介面</title>
-    <!-- 載入 Tailwind CSS -->
+    <title>量化交易回測系統 (Pro版)</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 載入 Plotly.js for charting -->
+    <!-- Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        /* 使用 Inter 字體 */
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); }
-        .input-group label { font-weight: 500; color: #1f2937; }
-        .input-group input, .input-group select { border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 12px; transition: border-color 0.15s; width: 100%; }
-        .input-group input:focus, .input-group select:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
-        .file-upload-label { cursor: pointer; border: 2px dashed #9ca3af; padding: 12px; text-align: center; border-radius: 8px; transition: background-color 0.2s; }
-        .file-upload-label:hover { background-color: #f9fafb; }
-        .btn-primary { background-color: #3b82f6; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 600; transition: background-color 0.2s; }
-        .btn-primary:hover:not(:disabled) { background-color: #2563eb; }
-        .btn-primary:disabled { background-color: #9ca3af; cursor: not-allowed; }
-        .result-box { border-left: 4px solid #10b981; padding-left: 1rem; }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; color: #334155; }
+        
+        /* 卡片通用樣式 */
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; transition: all 0.2s; }
+        .card:hover { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.025); }
+        
+        /* 標題樣式 */
+        .section-header { display: flex; align-items: center; gap: 0.5rem; padding: 1rem 1.5rem; border-bottom: 1px solid #f1f5f9; background-color: #f8fafc; border-radius: 12px 12px 0 0; }
+        .section-title { font-weight: 700; color: #475569; font-size: 1.1rem; }
+        .section-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: white; }
+        
+        /* 輸入框樣式 */
+        .input-group { margin-bottom: 1rem; }
+        .input-label { display: block; font-size: 0.85rem; font-weight: 500; color: #64748b; margin-bottom: 0.25rem; }
+        .input-field { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; transition: border-color 0.15s, box-shadow 0.15s; color: #1e293b; }
+        .input-field:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .input-field:disabled { background-color: #f1f5f9; cursor: not-allowed; }
+        
+        /* 檔案上傳樣式 */
+        .file-drop-zone { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 1.5rem; text-align: center; cursor: pointer; transition: all 0.2s; background-color: #f8fafc; }
+        .file-drop-zone:hover { border-color: #3b82f6; background-color: #eff6ff; }
+        .file-drop-zone.loaded { border-color: #10b981; background-color: #f0fdf4; }
+        .file-text { font-size: 0.9rem; color: #64748b; margin-top: 0.5rem; }
+        .file-status { font-size: 0.8rem; font-weight: 600; margin-top: 0.25rem; }
+        
+        /* 統計卡片 */
+        .stat-card { background: white; padding: 1.25rem; border-radius: 10px; border: 1px solid #e2e8f0; text-align: center; }
+        .stat-label { font-size: 0.8rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-value { font-size: 1.75rem; font-weight: 800; color: #1e293b; margin-top: 0.25rem; }
+        
+        /* 顏色主題 */
+        .theme-blue { background-color: #3b82f6; }
+        .theme-indigo { background-color: #6366f1; }
+        .theme-emerald { background-color: #10b981; }
+        .theme-rose { background-color: #f43f5e; }
+        .text-theme-emerald { color: #059669; }
+        .text-theme-rose { color: #e11d48; }
+
+        /* 按鈕特效 */
+        .btn-run { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; padding: 0.75rem 2rem; border-radius: 50px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: transform 0.1s, box-shadow 0.2s; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3); }
+        .btn-run:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 8px -1px rgba(37, 99, 235, 0.4); }
+        .btn-run:active:not(:disabled) { transform: translateY(0); }
+        .btn-run:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
+        
+        /* Loading Overlay */
+        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); z-index: 50; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
     </style>
-    <script>
-        // --- 輔助函數：CSV 讀取與數據轉換 ---
-        function parseCSV(text) {
-            const lines = text.trim().split('\n');
-            if (lines.length < 1) return null;
-            
-            // 使用正則表達式處理可能包含在引號內的逗號
-            const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-            const data = [];
-            
-            for (let i = 1; i < lines.length; i++) {
-                if (!lines[i].trim()) continue;
-                // 簡易解析，假設數據不會包含複雜的引號和逗號
-                const values = lines[i].split(',');
-                const row = {};
-                if (values.length !== header.length) {
-                    console.error("Row length mismatch:", lines[i]);
-                    continue;
-                }
-                for (let j = 0; j < header.length; j++) {
-                    const key = header[j];
-                    const value = values[j].trim().replace(/"/g, '');
-                    // 嘗試轉換為數字，否則保留為字串
-                    row[key] = isNaN(Number(value)) || value === '' ? value : Number(value);
-                }
-                data.push(row);
-            }
-            return data;
-        }
-
-        // --- 核心邏輯：策略回測 (移植自 Python 程式碼) ---
-
-        /**
-         * 計算單一序列的線性迴歸斜率
-         * @param {number[]} data 數組
-         * @param {number} period 週期
-         * @returns {number} 斜率
-         */
-        function calculateSlope(data, period) {
-            if (data.length !== period) return NaN;
-            
-            // 實現 np.polyfit(range(len(x)), x, 1)[0]
-            const n = period;
-            const x = Array.from({ length: n }, (_, i) => i);
-            const y = data;
-
-            // 計算平均數
-            const meanX = x.reduce((a, b) => a + b) / n;
-            const meanY = y.reduce((a, b) => a + b) / n;
-
-            // 計算斜率 (m)
-            let numerator = 0;
-            let denominator = 0;
-            for (let i = 0; i < n; i++) {
-                numerator += (x[i] - meanX) * (y[i] - meanY);
-                denominator += (x[i] - meanX) ** 2;
-            }
-
-            // 避免除以零
-            if (denominator === 0) return NaN;
-
-            return numerator / denominator;
-        }
-        
-        /**
-         * 計算簡單移動平均 (SMA)
-         * @param {number[]} data 數組
-         * @param {number} period 週期
-         * @returns {number[]} 包含 SMA 值的數組
-         */
-        function calculateSMA(data, period) {
-            const sma = new Array(data.length).fill(NaN);
-            let sum = 0;
-            for (let i = 0; i < data.length; i++) {
-                sum += data[i];
-                if (i >= period - 1) {
-                    sma[i] = sum / period;
-                    sum -= data[i - period + 1];
-                }
-            }
-            return sma;
-        }
-
-        /**
-         * 執行回測的主要邏輯
-         * @param {Object[]} DF NQ 1hr K 線數據
-         * @param {Object[]} fDF 因子數據 (Faman大表)
-         * @param {Object[]} nqdDF NQ Day K 線數據
-         * @param {Object} params 回測參數
-         * @returns {Object} 包含回測結果和績效統計
-         */
-        function runBacktest(DF, fDF, nqdDF, params) {
-            
-            const {
-                option_slope, OP_S_S, OI_slope, unapplied_slope, CS, CSL,
-                NQsma, stop_loss, high_stop_loss, downp,
-                F_unit, safetymargin, contract_value, money0 // 新增 money0
-            } = params;
-
-            // --- 1. 數據對齊和預處理 ---
-            // 由於 JavaScript 的 CSV 讀取無法直接處理時區轉換，
-            // 假設用戶上傳的數據已經經過正確的時區轉換，並包含 '日期' 和 'Time' 欄位。
-
-            // 確保 DF 和 fDF 有相同的 '日期' 欄位，並且 fDF 數據少於 DF
-            
-            // --- 2. 信號生成邏輯 (in_signal 函式核心) ---
-
-            const fDFProcessed = fDF.map(row => ({ ...row })); // 複製一份，避免修改原始數據
-            
-            // 提取所需的指標數據
-            const op_data = fDFProcessed.map(row => row["臺指選擇權_買權_外資_未平倉餘額_買賣差額_契約金額"] || 0);
-            const oi_data = fDFProcessed.map(row => row["臺股期貨_總未平倉餘額多空淨額"] || 0);
-            const ua_data = fDFProcessed.map(row => row["臺股期貨(TX+MTX/4+TMF/20)_當月未沖銷部位數"] || 0);
-            const financing_ratio = fDFProcessed.map(row => row["融資維持率"] || 0);
-            
-            // 2.1 計算斜率
-            for (let i = 0; i < fDFProcessed.length; i++) {
-                // 選擇權買權斜率
-                const op_window = op_data.slice(i - option_slope + 1, i + 1);
-                fDFProcessed[i].op_slope = calculateSlope(op_window, option_slope);
-
-                // 總未平倉餘額斜率
-                const oi_window = oi_data.slice(i - OI_slope + 1, i + 1);
-                fDFProcessed[i].oi_slope = calculateSlope(oi_window, OI_slope);
-
-                // 當月未沖銷斜率 (未使用在進場訊號中，但原始碼有計算)
-                // const ua_window = ua_data.slice(i - unapplied_slope + 1, i + 1);
-                // fDFProcessed[i].ua_slope = calculateSlope(ua_window, unapplied_slope);
-            }
-            
-            // 2.2 CS 過濾 (Condition SMA)
-            if (CS) {
-                // 找出 min_op, min_oi, min_ua (為了 "normal_" 處理)
-                const min_op = Math.min(...op_data.filter(n => typeof n === 'number'));
-                const min_oi = Math.min(...oi_data.filter(n => typeof n === 'number'));
-                // const min_ua = Math.min(...ua_data.filter(n => typeof n === 'number')); // ua 未使用在訊號中
-
-                const normal_op = op_data.map(n => n + Math.abs(min_op));
-                const normal_oi = oi_data.map(n => n + Math.abs(min_oi));
-
-                const sma_op = calculateSMA(normal_op, CSL);
-                const sma_oi = calculateSMA(normal_oi, CSL);
-                
-                for (let i = 0; i < fDFProcessed.length; i++) {
-                    const normal_op_i = normal_op[i];
-                    fDFProcessed[i].CS_OP = (normal_op_i > sma_op[i]) ? 1 : 0;
-                    // fDFProcessed[i].CS_OI = (normal_oi[i] > sma_oi[i]) ? 1 : 0; // OI 未使用在訊號 2 中
-                }
-            } else {
-                for (let i = 0; i < fDFProcessed.length; i++) {
-                    fDFProcessed[i].CS_OP = 1;
-                    // fDFProcessed[i].CS_OI = 1;
-                }
-            }
-
-            // 2.3 NQ 日 K 均線過濾 (NQsma)
-            const nqDayClose = nqdDF.map(row => row["Close"] || 0);
-            let indaylist = [];
-            if (NQsma > 0) {
-                const nqDaySMA = calculateSMA(nqDayClose, NQsma);
-                for (let i = 0; i < nqdDF.length - 1; i++) {
-                    // if nqdDF.loc[nqdi, "Close"] > nqdDF.loc[nqdi, "SMA"]:
-                    if (nqDayClose[i] > nqDaySMA[i]) {
-                        // indaylist.append(nqdDF.loc[nqdi+1, "日期"])
-                        indaylist.push(nqdDF[i + 1]["日期"]);
-                    }
-                }
-            } else {
-                // NQsma = 0 意味著不需要過濾 (允許所有日期)
-                for (let i = 0; i < nqdDF.length - 1; i++) {
-                    indaylist.push(nqdDF[i + 1]["日期"]);
-                }
-            }
-
-            // 2.4 生成進場訊號 (以日為基礎)
-            for (let i = 0; i < fDFProcessed.length; i++) {
-                // fDF: 日數據
-                // 進場訊號_1 = 1 if op_slope > OP_S_S and CS_OP == 1 else 0
-                fDFProcessed[i].signal_1 = (fDFProcessed[i].op_slope > OP_S_S && fDFProcessed[i].CS_OP === 1) ? 1 : 0;
-                // 進場訊號_2 = 1 if oi_slope > 0 else 0
-                fDFProcessed[i].signal_2 = (fDFProcessed[i].oi_slope > 0) ? 1 : 0;
-                // 進場訊號_4 = 1 if 融資維持率 < 160 else 0
-                fDFProcessed[i].signal_4 = (financing_ratio[i] < 160) ? 1 : 0;
-            }
-
-            // 將日訊號映射到 1 小時 K 線數據 (DF)
-            const DF_final = DF.map(row => ({ ...row, signal_1: 0, signal_2: 0, signal_4: 0 }));
-            const dateToSignals = new Map();
-            fDFProcessed.forEach(row => {
-                dateToSignals.set(row["日期"], {
-                    s1: row.signal_1,
-                    s2: row.signal_2,
-                    s4: row.signal_4
-                });
-            });
-
-            const DF_final_map = DF_final.map(row => {
-                const signals = dateToSignals.get(row["日期"]);
-                if (signals && indaylist.includes(row["日期"])) {
-                    row.signal_1 = signals.s1;
-                    row.signal_2 = signals.s2;
-                    row.signal_4 = signals.s4;
-                }
-                return row;
-            });
-            
-            // --- 3. 回測邏輯 (bt_ht_slope_2 函式核心) ---
-            
-            const sl_ratio = stop_loss / 100;       // 底部止損%
-            const sl_high_ratio = high_stop_loss / 100; // 最大回撤%
-            const fee = 1.25;                       // 一買一賣所有手續費和稅
-            // const money0 = F_unit * 5;           // <-- 已從參數讀取
-            
-            // 3.1 400 期 SMA 過濾
-            const hrClose = DF_final_map.map(row => row["Close"] || 0);
-            const sma400 = calculateSMA(hrClose, 400);
-
-            // 3.2 日 K 均線 (用於止損)
-            let nqDaySMA_for_bt = [];
-            if (NQsma > 0) {
-                 nqDaySMA_for_bt = calculateSMA(nqDayClose, NQsma);
-            }
-            
-            // 3.3 回測狀態
-            let recotd1 = {
-                money: money0, 
-                F_Hold: [], // 陣列儲存持倉的進場價格 (Open Price)
-                F_Value: 0, 
-                Account_Value: money0
-            };
-            const record0 = { Time: [], Account_Value: [], Profit_Ratio: [] };
-            let maxAccountValue = money0; // 用於計算最大回撤
-            
-            const start_index = 460; // 從 460 開始（確保 400 SMA 和 460 K 線高點計算完整）
-            
-            for (let i = start_index; i < DF_final_map.length; i++) {
-                const current = DF_final_map[i];
-                const prev = DF_final_map[i - 1];
-                const thetime = current["Time"];
-                const thedate = thetime.split(" ")[0];
-                const time_of_day = thetime.split(" ")[1];
-
-                let smaprice = NaN;
-                // 找到前一天的日K數據 (用於日 K 均線止損)
-                let checki = -1;
-                for(let k = nqdDF.length - 1; k >= 0; k--){
-                    if(nqdDF[k]["日期"] === thedate && k > 0){
-                        checki = k - 1;
-                        break;
-                    }
-                }
-
-                if (checki !== -1) {
-                    // side = 1 if dayDF.loc[checki, "Close"] > dayDF.loc[checki, "SMA"] else 0
-                    // smaprice = dayDF.loc[checki, "SMA"]
-                    if (NQsma > 0) {
-                         smaprice = nqDaySMA_for_bt[checki];
-                    } else {
-                         // 如果 NQsma = 0，則日K均線不作為止損條件 (smaprice = 0, 使條件難以滿足)
-                         smaprice = 0; 
-                    }
-                } 
-                // else: // 保持前一天的 smaprice，但這裡簡化為 NaN，因為我們只檢查 i > 460
-                
-                // 3.4 準備出場價
-                let last_open = 0;
-                // 找前一天的 09:00:00 Open
-                for(let j = 1; j < 60; j++) {
-                    if (DF_final_map[i - j] && DF_final_map[i-j]["Time"].split(" ")[0] !== thedate && DF_final_map[i-j]["Time"].split(" ")[1] === "09:00:00") {
-                        last_open = DF_final_map[i-j]["Open"];
-                        break;
-                    }
-                }
-                
-                const out_price = last_open * (1 - sl_ratio); // 出場價1 (底部止損)
-                
-                // 找到過去 460 根 K 線的高點
-                let maxHigh = -Infinity;
-                for(let k = i - 460; k < i; k++) {
-                    if (DF_final_map[k] && DF_final_map[k]["High"] > maxHigh) {
-                        maxHigh = DF_final_map[k]["High"];
-                    }
-                }
-                const high_stop_price = maxHigh * (1 - sl_high_ratio); // 出場價2 (最大回撤止損)
-                const sma_down_price = smaprice * (1 - (downp / 100)); // 出場價3 (日 K 均線止損)
-                
-                const min_stop_price = Math.min(out_price, high_stop_price, sma_down_price);
-
-                // --- Open 的時候要做什麼事 (檢查出場) ---
-                if (recotd1.F_Hold.length > 0) {
-                    // DF.loc[i-1, "Close"] < max([out_price, high_stop_price])
-                    if (prev["Close"] < min_stop_price) {
-                        let total_profit = 0;
-                        const exitPrice = current["Open"];
-                        recotd1.F_Hold.forEach(entryPrice => {
-                            // ((DF.loc[i, "Open"]-f)*contract_value - fee)
-                            total_profit += ((exitPrice - entryPrice) * contract_value - fee);
-                        });
-                        recotd1.money += total_profit;
-                        recotd1.F_Hold = [];
-                        recotd1.F_Value = 0;
-                        recotd1.Account_Value = recotd1.money + recotd1.F_Value;
-                    }
-                }
-
-                // --- Open 的時候要做什麼事 (檢查進場) ---
-                let buynum = 0;
-                // maCheck = True if DF.loc[i-1,"Close"] > DF.loc[i-1, "SMA_400"] else False
-                const maCheck = prev["Close"] > sma400[i - 1]; // SMA400 在 i-1 的值
-                
-                if (time_of_day === "06:00:00" && maCheck) {
-                    // 檢查進場訊號 (1, 2, 4)
-                    if (current.signal_1 === 1) buynum++;
-                    if (current.signal_2 === 1) buynum++;
-                    if (current.signal_4 === 1) buynum++;
-                }
-
-                if (buynum > 0) {
-                    const availableToBuy = Math.floor((recotd1.money - recotd1.F_Hold.length * F_unit * safetymargin) / (F_unit * safetymargin));
-                    
-                    const contractsToBuy = Math.min(buynum, availableToBuy);
-
-                    for (let b_count = 0; b_count < contractsToBuy; b_count++) {
-                        recotd1.F_Hold.push(current["Open"]);
-                    }
-                    
-                    // 更新 F_Value 和 Account_Value (用當前 Open 價計算)
-                    let f_value = 0;
-                    const openPrice = current["Open"];
-                    recotd1.F_Hold.forEach(entryPrice => {
-                        f_value += ((openPrice - entryPrice) * contract_value - fee);
-                    });
-                    recotd1.F_Value = f_value;
-                    recotd1.Account_Value = recotd1.money + recotd1.F_Value;
-                }
-                
-                // --- Close 的時候要做什麼事 (計算帳戶價值) ---
-                let f_value_close = 0;
-                const closePrice = current["Close"];
-                recotd1.F_Hold.forEach(entryPrice => {
-                    // ((DF.loc[i, "Close"]-f)*contract_value - fee)
-                    f_value_close += ((closePrice - entryPrice) * contract_value - fee);
-                });
-                recotd1.F_Value = f_value_close;
-                recotd1.Account_Value = recotd1.money + recotd1.F_Value;
-
-                // 更新最大帳戶價值 (用於最大回撤計算)
-                if (recotd1.Account_Value > maxAccountValue) {
-                    maxAccountValue = recotd1.Account_Value;
-                }
-
-                // 換天的時候紀錄帳戶
-                if (i === DF_final_map.length - 1 || thedate !== DF_final_map[i + 1]["Time"].split(" ")[0]) {
-                    // record0 = {"Time":[],"Account_Value":[],"Rest_Money_buy":[]}
-                    record0.Time.push(thedate);
-                    record0.Account_Value.push(recotd1.Account_Value);
-                    const profitRatio = (recotd1.Account_Value - money0) / money0;
-                    record0.Profit_Ratio.push(profitRatio);
-                }
-            }
-
-            // --- 4. 績效統計 ---
-            const finalValue = record0.Account_Value.length > 0 ? record0.Account_Value[record0.Account_Value.length - 1] : money0;
-            const finalProfit = finalValue - money0;
-            const totalReturn = (finalProfit / money0) * 100;
-            
-            let drawdown = 0;
-            let peak = money0;
-            for (const value of record0.Account_Value) {
-                peak = Math.max(peak, value);
-                const currentDrawdown = (peak - value) / peak;
-                drawdown = Math.max(drawdown, currentDrawdown);
-            }
-            const maxDrawdown = drawdown * 100;
-
-            return {
-                equityCurve: record0,
-                money0: money0,
-                stats: {
-                    totalReturn: totalReturn.toFixed(2) + '%',
-                    finalValue: finalValue.toFixed(2),
-                    maxDrawdown: maxDrawdown.toFixed(2) + '%',
-                    // 交易次數：實際計算進場條件被滿足且有資金買入的次數
-                    tradeCount: DF_final_map.filter(row => row.signal_1 + row.signal_2 + row.signal_4 > 0 && row["Time"].split(" ")[1] === "06:00:00" && hrClose[DF_final_map.indexOf(row) - 1] > sma400[DF_final_map.indexOf(row) - 1]).length 
-                }
-            };
-        }
-
-        // --- 介面控制與事件處理 ---
-
-        let hDF_data = [];
-        let fDF_data = [];
-        let nqdDF_data = [];
-        let filesReady = false;
-
-        function handleFileUpload(event, fileType) {
-            const file = event.target.files[0];
-            const reader = new FileReader();
-
-            reader.onload = function (e) {
-                const data = parseCSV(e.target.result);
-                if (!data || data.length === 0) {
-                    showModal('檔案錯誤', 'CSV 檔案解析失敗或為空。');
-                    return;
-                }
-
-                switch (fileType) {
-                    case 'hDF': hDF_data = data; break;
-                    case 'fDF': fDF_data = data; break;
-                    case 'nqdDF': nqdDF_data = data; break;
-                }
-
-                document.getElementById(`${fileType}-status`).textContent = `已載入 ${data.length} 筆資料`;
-                checkFilesReady();
-            };
-
-            reader.onerror = function () {
-                showModal('檔案錯誤', '檔案讀取錯誤。');
-            };
-
-            if (file) {
-                reader.readAsText(file, 'UTF-8');
-            }
-        }
-
-        function checkFilesReady() {
-            filesReady = hDF_data.length > 0 && fDF_data.length > 0 && nqdDF_data.length > 0;
-            const button = document.getElementById('run-backtest-btn');
-            button.disabled = !filesReady;
-            button.textContent = filesReady ? '執行回測' : '請上傳所有檔案';
-        }
-
-        function getParameters() {
-            // 讀取所有參數欄位的值
-            const params = {
-                // 信號參數
-                option_slope: parseInt(document.getElementById('option_slope').value),
-                OP_S_S: parseFloat(document.getElementById('OP_S_S').value),
-                OI_slope: parseInt(document.getElementById('OI_slope').value),
-                unapplied_slope: parseInt(document.getElementById('unapplied_slope').value),
-                CS: document.getElementById('CS').value === 'True',
-                CSL: parseInt(document.getElementById('CSL').value),
-                // 回測參數
-                NQsma: parseInt(document.getElementById('NQsma').value),
-                stop_loss: parseFloat(document.getElementById('stop_loss').value),
-                high_stop_loss: parseFloat(document.getElementById('high_stop_loss').value),
-                downp: parseFloat(document.getElementById('downp').value),
-                // 資金與合約參數
-                money0: parseFloat(document.getElementById('money0').value), // 新增起始資金
-                F_unit: parseFloat(document.getElementById('F_unit').value),
-                safetymargin: parseFloat(document.getElementById('safetymargin').value),
-                contract_value: parseFloat(document.getElementById('contract_value').value),
-            };
-            return params;
-        }
-
-        function displayResults(results) {
-            const stats = results.stats;
-            const curve = results.equityCurve;
-            const money0 = results.money0;
-            
-            // 1. 顯示績效統計
-            document.getElementById('stat-total-return').textContent = stats.totalReturn;
-            document.getElementById('stat-final-value').textContent = stats.finalValue;
-            document.getElementById('stat-max-drawdown').textContent = stats.maxDrawdown;
-            document.getElementById('stat-trade-count').textContent = stats.tradeCount;
-            document.getElementById('stats-output').classList.remove('hidden');
-
-            // 2. 繪製基金曲線
-            const traceEquity = {
-                x: curve.Time,
-                y: curve.Account_Value,
-                mode: 'lines',
-                name: '淨值曲線',
-                line: { color: '#3b82f6' }
-            };
-            
-            const traceInitial = {
-                x: [curve.Time[0], curve.Time[curve.Time.length - 1]],
-                y: [money0, money0],
-                mode: 'lines',
-                name: '起始資金',
-                line: { dash: 'dot', color: '#ef4444' }
-            };
-
-            const layout = {
-                title: '回測淨值曲線',
-                xaxis: { 
-                    title: '日期', 
-                    tickformat: '%Y-%m-%d',
-                    type: 'date'
-                },
-                yaxis: { title: '帳戶價值' },
-                margin: { t: 40, b: 60, l: 60, r: 20 },
-                hovermode: 'x unified',
-                autosize: true,
-                paper_bgcolor: '#f9fafb',
-                plot_bgcolor: '#ffffff',
-            };
-
-            Plotly.newPlot('equity-chart', [traceEquity, traceInitial], layout, {responsive: true});
-            document.getElementById('chart-output').classList.remove('hidden');
-        }
-
-        async function runBacktestHandler() {
-            if (!filesReady) {
-                showModal('檔案錯誤', '請先上傳所有三個必要的 CSV 檔案！');
-                return;
-            }
-
-            const btn = document.getElementById('run-backtest-btn');
-            btn.disabled = true;
-            btn.textContent = '回測進行中...';
-
-            try {
-                const params = getParameters();
-                console.log('Running backtest with parameters:', params);
-                
-                // ** 修正：強制清除舊圖表，確保每次繪製都是乾淨的 **
-                const chartDiv = document.getElementById('equity-chart');
-                if (window.Plotly && chartDiv) {
-                    Plotly.purge('equity-chart'); 
-                    chartDiv.innerHTML = ''; // 積極清空 DOM 內容
-                }
-                
-                // 執行核心回測邏輯
-                const results = runBacktest(hDF_data, fDF_data, nqdDF_data, params);
-                
-                // 顯示結果
-                displayResults(results);
-
-            } catch (error) {
-                console.error("Backtest Failed:", error);
-                // 顯示自定義模態框 (替代 alert)
-                showModal('回測失敗', '執行回測時發生錯誤。請檢查您的檔案格式和輸入的參數是否正確。' + (error.message || '未知錯誤。'));
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '執行回測';
-            }
-        }
-        
-        function showModal(title, message) {
-            const modal = document.getElementById('custom-modal');
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-message').textContent = message;
-            modal.classList.remove('hidden');
-        }
-
-        function closeModal() {
-            document.getElementById('custom-modal').classList.add('hidden');
-        }
-
-        // 初始化
-        window.onload = function() {
-            checkFilesReady();
-            document.getElementById('run-backtest-btn').addEventListener('click', runBacktestHandler);
-            // 檔案上傳事件監聽
-            document.getElementById('hDF-upload').addEventListener('change', (e) => handleFileUpload(e, 'hDF'));
-            document.getElementById('fDF-upload').addEventListener('change', (e) => handleFileUpload(e, 'fDF'));
-            document.getElementById('nqdDF-upload').addEventListener('change', (e) => handleFileUpload(e, 'nqdDF'));
-            // 模態框關閉
-            document.getElementById('modal-close-btn').addEventListener('click', closeModal);
-            document.getElementById('modal-backdrop').addEventListener('click', closeModal);
-        };
-    </script>
 </head>
-<body class="p-4 md:p-8">
+<body class="p-4 md:p-8 max-w-[1600px] mx-auto">
 
-    <div class="max-w-7xl mx-auto">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6">量化交易策略回測介面 (單參數)</h1>
-
-        <!-- 檔案上傳區 -->
-        <div class="card p-6 mb-8">
-            <h2 class="text-xl font-semibold mb-4 text-gray-700">1. 數據準備 (CSV 上傳)</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                
-                <!-- NQ 1 Hr K 線數據 (主數據) -->
-                <div class="input-group">
-                    <label class="block text-sm mb-1">主數據：NQ 1Hr K 線 (DF)</label>
-                    <label for="hDF-upload" class="file-upload-label">
-                        點擊上傳 (含 Close, Open, High, Low, 日期, Time)
-                        <input type="file" id="hDF-upload" class="hidden" accept=".csv">
-                    </label>
-                    <p id="hDF-status" class="text-xs mt-1 text-gray-500">未載入</p>
-                </div>
-                
-                <!-- 因子數據 (Faman大表) -->
-                <div class="input-group">
-                    <label class="block text-sm mb-1">因子數據：Faman大表 (fDF)</label>
-                    <label for="fDF-upload" class="file-upload-label">
-                        點擊上傳 (含斜率指標, 融資維持率等)
-                        <input type="file" id="fDF-upload" class="hidden" accept=".csv">
-                    </label>
-                    <p id="fDF-status" class="text-xs mt-1 text-gray-500">未載入</p>
-                </div>
-                
-                <!-- NQ Day K 線數據 -->
-                <div class="input-group">
-                    <label class="block text-sm mb-1">輔助數據：NQ Day K 線 (nqdDF)</label>
-                    <label for="nqdDF-upload" class="file-upload-label">
-                        點擊上傳 (含 Close, 用於日 K 均線過濾)
-                        <input type="file" id="nqdDF-upload" class="hidden" accept=".csv">
-                    </label>
-                    <p id="nqdDF-status" class="text-xs mt-1 text-gray-500">未載入</p>
-                </div>
-
-            </div>
+    <!-- Header -->
+    <div class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-chart-line text-blue-600"></i>
+                量化交易策略回測系統 <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full ml-2">Pro</span>
+            </h1>
+            <p class="text-slate-500 text-sm mt-1">基於多因子斜率與動態濾網的期貨回測模型</p>
         </div>
+        <div>
+            <button id="run-backtest-btn" class="btn-run flex items-center gap-2" disabled>
+                <i class="fa-solid fa-play"></i> 執行回測分析
+            </button>
+        </div>
+    </div>
 
-        <!-- 參數輸入區 -->
-        <div class="card p-6 mb-8">
-            <h2 class="text-xl font-semibold mb-4 text-gray-700">2. 策略與資金參數設定</h2>
+    <!-- Main Grid -->
+    <div class="grid grid-cols-12 gap-6">
+
+        <!-- Left Column: Settings -->
+        <div class="col-span-12 xl:col-span-4 space-y-6">
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- 1. Data Upload -->
+            <div class="card">
+                <div class="section-header">
+                    <div class="section-icon theme-blue"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                    <div class="section-title">數據來源</div>
+                </div>
+                <div class="p-6 space-y-4">
+                    <!-- File 1 -->
+                    <div>
+                        <label for="hDF-upload" class="hidden"></label>
+                        <div class="file-drop-zone" id="zone-hDF" onclick="document.getElementById('hDF-upload').click()">
+                            <i class="fa-solid fa-file-csv text-2xl text-slate-400"></i>
+                            <div class="file-text">NQ 1Hr K線數據 (主數據)</div>
+                            <div class="file-status text-slate-400" id="hDF-status">未選擇檔案</div>
+                        </div>
+                        <input type="file" id="hDF-upload" class="hidden" accept=".csv">
+                    </div>
+                    <!-- File 2 -->
+                    <div>
+                        <div class="file-drop-zone" id="zone-fDF" onclick="document.getElementById('fDF-upload').click()">
+                            <i class="fa-solid fa-table-list text-2xl text-slate-400"></i>
+                            <div class="file-text">因子數據 (台股籌碼/日)</div>
+                            <div class="file-status text-slate-400" id="fDF-status">未選擇檔案</div>
+                        </div>
+                        <input type="file" id="fDF-upload" class="hidden" accept=".csv">
+                    </div>
+                    <!-- File 3 -->
+                    <div>
+                        <div class="file-drop-zone" id="zone-nqdDF" onclick="document.getElementById('nqdDF-upload').click()">
+                            <i class="fa-solid fa-calendar-days text-2xl text-slate-400"></i>
+                            <div class="file-text">NQ 日K線數據 (趨勢濾網)</div>
+                            <div class="file-status text-slate-400" id="nqdDF-status">未選擇檔案</div>
+                        </div>
+                        <input type="file" id="nqdDF-upload" class="hidden" accept=".csv">
+                    </div>
+                </div>
+            </div>
 
-                <!-- 資金與合約參數 -->
-                <div class="lg:col-span-4 border-b pb-4 mb-4">
-                    <h3 class="text-lg font-medium text-blue-600 mb-2">合約與資金參數</h3>
-                    <div class="grid grid-cols-4 gap-4">
-                        <!-- 新增起始資金 -->
+            <!-- 2. Capital & Contract -->
+            <div class="card">
+                <div class="section-header">
+                    <div class="section-icon theme-indigo"><i class="fa-solid fa-coins"></i></div>
+                    <div class="section-title">合約與資金參數</div>
+                </div>
+                <div class="p-6 grid grid-cols-2 gap-4">
+                    <div class="input-group">
+                        <label class="input-label">起始資金 (USD)</label>
+                        <input type="number" id="money0" value="12210" class="input-field font-mono">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">合約規格 (點值)</label>
+                        <input type="number" id="contract_value" value="2" class="input-field font-mono">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">每口保證金</label>
+                        <input type="number" id="F_unit" value="2442" class="input-field font-mono">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">安全邊際係數</label>
+                        <input type="number" id="safetymargin" value="1.9" step="0.1" class="input-field font-mono">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Entry Signals -->
+            <div class="card">
+                <div class="section-header">
+                    <div class="section-icon theme-emerald"><i class="fa-solid fa-arrow-right-to-bracket"></i></div>
+                    <div class="section-title">進場訊號設定</div>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-2 gap-4">
                         <div class="input-group">
-                            <label for="money0" class="text-xs">起始資金 (money0)</label>
-                            <input type="number" id="money0" value="12210" step="1000" required>
+                            <label class="input-label">選擇權斜率天數</label>
+                            <input type="number" id="option_slope" value="13" class="input-field">
                         </div>
                         <div class="input-group">
-                            <label for="F_unit" class="text-xs">每口保證金 (F_unit)</label>
-                            <input type="number" id="F_unit" value="2442" step="1" required>
+                            <label class="input-label">斜率門檻 (OP_S_S)</label>
+                            <input type="number" id="OP_S_S" value="5000" class="input-field">
                         </div>
                         <div class="input-group">
-                            <label for="safetymargin" class="text-xs">安全邊際 (safetymargin)</label>
-                            <input type="number" id="safetymargin" value="1.9" step="0.1" required>
+                            <label class="input-label">未平倉斜率天數</label>
+                            <input type="number" id="OI_slope" value="23" class="input-field">
                         </div>
-                        <div class="input-group">
-                            <label for="contract_value" class="text-xs">MNQ 合約規格 (contract_value)</label>
-                            <input type="number" id="contract_value" value="2" step="1" required>
+                        <div class="input-group opacity-50">
+                            <label class="input-label">未沖銷斜率 (未使用)</label>
+                            <input type="number" id="unapplied_slope" value="23" class="input-field" disabled>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- 斜率計算參數 (in_signal) -->
-                <div class="lg:col-span-2">
-                    <h3 class="text-lg font-medium text-green-600 mb-2">A. 進場訊號 (斜率/門檻)</h3>
-                    <div class="space-y-3">
-                        <div class="input-group">
-                            <label for="option_slope" class="text-xs">選擇權斜率天數 (option_slope)</label>
-                            <input type="number" id="option_slope" value="13" step="1" required>
-                        </div>
-                        <div class="input-group">
-                            <label for="OP_S_S" class="text-xs">選擇權斜率進場門檻值 (OP_S_S)</label>
-                            <input type="number" id="OP_S_S" value="5000" step="1000" required>
-                        </div>
-                        <div class="input-group">
-                            <label for="OI_slope" class="text-xs">總未平倉餘額斜率天數 (OI_slope)</label>
-                            <input type="number" id="OI_slope" value="23" step="1" required>
-                        </div>
-                        <div class="input-group">
-                            <label for="unapplied_slope" class="text-xs">當月未沖銷斜率天數 (unapplied_slope)</label>
-                            <input type="number" id="unapplied_slope" value="23" step="1" required>
-                        </div>
-                    </div>
+            <!-- 4. Exit & Filters -->
+            <div class="card">
+                <div class="section-header">
+                    <div class="section-icon theme-rose"><i class="fa-solid fa-filter"></i></div>
+                    <div class="section-title">出場與濾網設定</div>
                 </div>
-
-                <!-- 過濾與回測參數 (bt_ht_slope_2) -->
-                <div class="lg:col-span-2">
-                    <h3 class="text-lg font-medium text-yellow-600 mb-2">B. 均線過濾與出場參數</h3>
-                    <div class="space-y-3">
-                        <div class="input-group">
-                            <label for="CS" class="text-xs">使用 CS 均線過濾 (CS)</label>
-                            <select id="CS">
-                                <option value="True">True</option>
-                                <option value="False">False</option>
+                <div class="p-6 space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="input-group col-span-2">
+                            <label class="input-label">啟用 CS 均線過濾</label>
+                            <select id="CS" class="input-field">
+                                <option value="True">啟用 (True)</option>
+                                <option value="False">停用 (False)</option>
                             </select>
                         </div>
                         <div class="input-group">
-                            <label for="CSL" class="text-xs">CS 過濾 SMA 週期 (CSL)</label>
-                            <input type="number" id="CSL" value="11" step="1" required>
+                            <label class="input-label">CS 濾網週期</label>
+                            <input type="number" id="CSL" value="11" class="input-field">
                         </div>
                         <div class="input-group">
-                            <label for="NQsma" class="text-xs">NQ 日 K 均線週期 (NQsma)</label>
-                            <input type="number" id="NQsma" value="13" step="1" required>
+                            <label class="input-label">NQ 日K均線週期</label>
+                            <input type="number" id="NQsma" value="13" class="input-field">
                         </div>
-                        <div class="grid grid-cols-3 gap-2">
-                            <div class="input-group col-span-1">
-                                <label for="stop_loss" class="text-xs">底部止損 % (SL)</label>
-                                <input type="number" id="stop_loss" value="11" step="1" required>
+                    </div>
+                    
+                    <div class="border-t border-slate-100 pt-4 mt-2">
+                        <label class="input-label mb-2 text-slate-800">停損條件設定 (%)</label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="text-xs text-slate-500 block mb-1">底部停損</label>
+                                <input type="number" id="stop_loss" value="11" class="input-field text-center">
                             </div>
-                            <div class="input-group col-span-1">
-                                <label for="high_stop_loss" class="text-xs">最大回撤止損 % (HS)</label>
-                                <input type="number" id="high_stop_loss" value="9" step="1" required>
+                            <div>
+                                <label class="text-xs text-slate-500 block mb-1">最大回撤</label>
+                                <input type="number" id="high_stop_loss" value="9" class="input-field text-center">
                             </div>
-                            <div class="input-group col-span-1">
-                                <label for="downp" class="text-xs">均線止損 % (DOWN)</label>
-                                <input type="number" id="downp" value="7" step="1" required>
+                            <div>
+                                <label class="text-xs text-slate-500 block mb-1">均線跌破</label>
+                                <input type="number" id="downp" value="7" class="input-field text-center">
                             </div>
                         </div>
                     </div>
                 </div>
-
             </div>
+
         </div>
 
-        <!-- 執行按鈕 -->
-        <div class="mb-8 text-center">
-            <button id="run-backtest-btn" class="btn-primary w-full md:w-1/3" disabled>
-                請上傳所有檔案
+        <!-- Right Column: Results -->
+        <div class="col-span-12 xl:col-span-8 space-y-6">
+            
+            <!-- Stats Row -->
+            <div id="stats-output" class="grid grid-cols-2 md:grid-cols-4 gap-4 hidden">
+                <div class="stat-card border-l-4 border-l-emerald-500">
+                    <div class="stat-label">總報酬率 (Total Return)</div>
+                    <div class="stat-value text-theme-emerald" id="stat-total-return">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">最終帳戶價值 (Final)</div>
+                    <div class="stat-value" id="stat-final-value">-</div>
+                </div>
+                <div class="stat-card border-l-4 border-l-rose-500">
+                    <div class="stat-label">最大回撤 (Max Drawdown)</div>
+                    <div class="stat-value text-theme-rose" id="stat-max-drawdown">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">總交易次數 (Count)</div>
+                    <div class="stat-value" id="stat-trade-count">-</div>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div id="chart-output" class="card p-4 hidden h-[600px]">
+                <div id="equity-chart" class="w-full h-full"></div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="card p-12 text-center text-slate-400 h-[400px] flex flex-col items-center justify-center">
+                <i class="fa-solid fa-chart-area text-6xl mb-4 opacity-20"></i>
+                <p class="text-lg">請上傳數據檔案並點擊「執行回測」以查看結果</p>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <div class="text-lg font-bold text-slate-700">正在執行回測運算...</div>
+            <div class="text-sm text-slate-500 mt-2">處理龐大數據中，請稍候</div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+            <h3 class="text-lg font-bold text-red-600 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i>錯誤</h3>
+            <p id="error-msg" class="text-slate-600 mb-6 text-sm"></p>
+            <button onclick="document.getElementById('error-modal').classList.add('hidden')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold py-2 px-4 rounded transition">
+                關閉
             </button>
         </div>
+    </div>
 
-        <!-- 結果顯示區 -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <script>
+        // --- Core Logic & Helpers ---
+
+        const parseCSV = (text) => {
+            const lines = text.trim().split('\n');
+            if (lines.length < 1) return null;
+            const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            return lines.slice(1).filter(l => l.trim()).map(line => {
+                const values = line.split(',');
+                const row = {};
+                header.forEach((key, i) => {
+                    let val = values[i] ? values[i].trim().replace(/"/g, '') : '';
+                    row[key] = (val !== '' && !isNaN(Number(val))) ? Number(val) : val;
+                });
+                return row;
+            });
+        };
+
+        const calculateSlope = (data, period) => {
+            if (!data || data.length !== period) return NaN;
+            let n = period;
+            let x = Array.from({length: n}, (_, i) => i);
+            let y = data;
             
-            <!-- 績效統計 -->
-            <div id="stats-output" class="card p-6 lg:col-span-1 hidden">
-                <h2 class="text-xl font-semibold mb-4 text-gray-700">3. 績效統計</h2>
-                <div class="space-y-3">
-                    <div class="result-box">
-                        <p class="text-sm text-gray-500">總報酬率</p>
-                        <p id="stat-total-return" class="text-2xl font-bold text-green-600">N/A</p>
-                    </div>
-                    <div class="result-box">
-                        <p class="text-sm text-gray-500">最終帳戶價值</p>
-                        <p id="stat-final-value" class="text-xl font-bold text-gray-800">N/A</p>
-                    </div>
-                    <div class="result-box">
-                        <p class="text-sm text-gray-500">最大回撤 (Max Drawdown)</p>
-                        <p id="stat-max-drawdown" class="text-xl font-bold text-red-600">N/A</p>
-                    </div>
-                    <div class="result-box">
-                        <p class="text-sm text-gray-500">交易次數 (粗略估計)</p>
-                        <p id="stat-trade-count" class="text-xl font-bold text-gray-800">N/A</p>
-                    </div>
-                </div>
-            </div>
+            // Validate data
+            if (y.some(val => typeof val !== 'number' || isNaN(val))) return NaN;
 
-            <!-- 淨值曲線圖表 -->
-            <div id="chart-output" class="card p-6 lg:col-span-2 hidden">
-                <div id="equity-chart" class="w-full h-96"></div>
-            </div>
+            let meanX = x.reduce((a, b) => a + b) / n;
+            let meanY = y.reduce((a, b) => a + b) / n;
+            let num = 0, den = 0;
+            for(let i=0; i<n; i++) {
+                num += (x[i] - meanX) * (y[i] - meanY);
+                den += (x[i] - meanX) ** 2;
+            }
+            return den === 0 ? NaN : num / den;
+        };
 
-        </div>
-    </div>
-    
-    <!-- 模態框 (替代 Alert) -->
-    <div id="custom-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <!-- 背景遮罩 -->
-            <div id="modal-backdrop" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+        const calculateSMA = (data, period) => {
+            let sma = new Array(data.length).fill(NaN);
+            let sum = 0;
+            for(let i=0; i<data.length; i++) {
+                if (typeof data[i] !== 'number' || isNaN(data[i])) {
+                    // Reset if data is invalid, simple handling
+                    sum = 0; 
+                    continue; 
+                }
+                sum += data[i];
+                if(i >= period) sum -= data[i-period];
+                if(i >= period-1) sma[i] = sum/period;
+            }
+            return sma;
+        };
 
-            <!-- 模態框容器 -->
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <div class="sm:flex sm:items-start">
-                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                            <!-- Icon -->
-                            <svg class="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        </div>
-                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                            <h3 id="modal-title" class="text-lg leading-6 font-medium text-gray-900">
-                                錯誤提示
-                            </h3>
-                            <div class="mt-2">
-                                <p id="modal-message" class="text-sm text-gray-500">
-                                    這裡將顯示錯誤訊息。
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                    <button type="button" id="modal-close-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
-                        確認
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+        // --- Backtest Engine ---
+
+        function runBacktest(DF, fDF, nqdDF, params) {
+            console.log("🚀 Starting Backtest...", params);
+
+            // 1. Preprocess Factor Data (Daily)
+            const fDFProcessed = fDF.map(row => ({...row}));
+            
+            // Extract numeric arrays for vectorized-like operations
+            const getCol = (name) => fDFProcessed.map(r => Number(r[name]) || 0);
+            const op_data = getCol("臺指選擇權_買權_外資_未平倉餘額_買賣差額_契約金額");
+            const oi_data = getCol("臺股期貨_總未平倉餘額多空淨額");
+            const financing = getCol("融資維持率");
+
+            // 1.1 Calculate Slopes & Indicators
+            for(let i=0; i<fDFProcessed.length; i++) {
+                // Option Slope
+                if(i >= params.option_slope - 1) {
+                    let window = op_data.slice(i - params.option_slope + 1, i + 1);
+                    fDFProcessed[i].op_slope = calculateSlope(window, params.option_slope);
+                } else { fDFProcessed[i].op_slope = NaN; }
+
+                // OI Slope
+                if(i >= params.OI_slope - 1) {
+                    let window = oi_data.slice(i - params.OI_slope + 1, i + 1);
+                    fDFProcessed[i].oi_slope = calculateSlope(window, params.OI_slope);
+                } else { fDFProcessed[i].oi_slope = NaN; }
+            }
+
+            // 1.2 CS Filter Logic
+            if(params.CS) {
+                // Find min to normalize
+                const validOps = op_data.filter(n => !isNaN(n));
+                const minOp = validOps.length ? Math.min(...validOps) : 0;
+                const normalOp = op_data.map(n => n + Math.abs(minOp));
+                const smaOp = calculateSMA(normalOp, params.CSL);
+                
+                for(let i=0; i<fDFProcessed.length; i++) {
+                    fDFProcessed[i].CS_OP = (!isNaN(normalOp[i]) && !isNaN(smaOp[i]) && normalOp[i] > smaOp[i]) ? 1 : 0;
+                }
+            } else {
+                fDFProcessed[i].CS_OP = 1; // Default Pass
+            }
+
+            // 1.3 NQ Daily Filter
+            // Map Date -> Previous Day's SMA Condition
+            // Warning: nqdDF data row "2023-01-01" contains Close of that day.
+            // At 09:00 on 2023-01-01, we only know "2022-12-31" data.
+            // Logic: Calculate SMA on nqdDF. 
+            // Create a Set of "Allowed Dates". If nqdDF[i] satisfies condition, then nqdDF[i+1].Date is allowed.
+            
+            const nqdClose = nqdDF.map(r => Number(r["Close"])||0);
+            const nqdSMA = calculateSMA(nqdClose, params.NQsma);
+            const allowedDays = new Set();
+            const daySmaMap = new Map(); // Date -> SMA of previous day (for stop loss logic)
+
+            if(params.NQsma > 0) {
+                for(let i=0; i<nqdDF.length-1; i++) {
+                    if(!isNaN(nqdClose[i]) && !isNaN(nqdSMA[i])) {
+                        // Store SMA for next day usage
+                        let nextDayDate = nqdDF[i+1]["日期"];
+                        daySmaMap.set(nextDayDate, nqdSMA[i]);
+
+                        // Entry Condition check
+                        if(nqdClose[i] > nqdSMA[i]) {
+                            allowedDays.add(nextDayDate);
+                        }
+                    }
+                }
+            }
+
+            // 1.4 Generate Daily Signals
+            const dailySignals = new Map();
+            for(let i=0; i<fDFProcessed.length; i++) {
+                const r = fDFProcessed[i];
+                const s1 = (r.op_slope > params.OP_S_S && r.CS_OP === 1) ? 1 : 0;
+                const s2 = (r.oi_slope > 0) ? 1 : 0;
+                const s4 = (financing[i] < 160 && financing[i] > 0) ? 1 : 0;
+                dailySignals.set(r["日期"], {s1, s2, s4});
+            }
+
+            // 2. Hourly Loop Simulation
+            const hrClose = DF.map(r => Number(r["Close"])||0);
+            const sma400 = calculateSMA(hrClose, 400); // 400hr SMA
+            
+            let record = {
+                money: params.money0,
+                hold: [], // Array of entry prices
+                history: { time: [], equity: [] },
+                tradeCount: 0
+            };
+
+            const sl_ratio = params.stop_loss / 100;
+            const hs_ratio = params.high_stop_loss / 100;
+            const down_ratio = params.downp / 100;
+
+            // Loop start from 460 to ensure MA is ready
+            for(let i=460; i<DF.length; i++) {
+                const cur = DF[i];
+                const prev = DF[i-1];
+                const date = cur["Time"].split(" ")[0]; // YYYY-MM-DD
+                const time = cur["Time"].split(" ")[1]; // HH:MM:SS
+                
+                // --- Exit Logic ---
+                // Calculate Stop Prices
+                
+                // 1. Previous Day 09:00 Open
+                let lastOpen = 0;
+                for(let k=1; k<60; k++) {
+                    if(i-k >= 0) {
+                        let t = DF[i-k]["Time"];
+                        if(t.split(" ")[0] !== date && t.split(" ")[1] === "09:00:00") {
+                            lastOpen = DF[i-k]["Open"];
+                            break;
+                        }
+                    }
+                }
+                const priceSL = lastOpen * (1 - sl_ratio);
+
+                // 2. High Stop (Max Drawdown from Peak)
+                // Optimization: Instead of loop 460 every time, we could track max. 
+                // But for JS loop < 100k, inner loop 460 is acceptable.
+                let maxHigh = 0;
+                for(let k=i-460; k<i; k++) if(DF[k].High > maxHigh) maxHigh = DF[k].High;
+                const priceHS = maxHigh * (1 - hs_ratio);
+
+                // 3. MA Stop
+                const prevDaySMA = daySmaMap.get(date) || 0;
+                const priceMA = prevDaySMA > 0 ? prevDaySMA * (1 - down_ratio) : 0;
+
+                // Combined Stop Logic: Trigger if Close < Max(SL, HS) OR Close < MA_Stop
+                const hardStop = Math.max(priceSL, priceHS);
+                const isStop = (prev.Close < hardStop) || (prevDaySMA > 0 && prev.Close < priceMA);
+
+                // Execute Exit
+                if(record.hold.length > 0 && isStop) {
+                    let profit = 0;
+                    let exitP = cur.Open; // Exit at Open
+                    record.hold.forEach(entryP => {
+                        profit += (exitP - entryP) * params.contract_value - 1.25; // fee
+                    });
+                    record.money += profit;
+                    record.hold = [];
+                }
+
+                // --- Entry Logic ---
+                let buySignal = 0;
+                // Hourly Trend Filter
+                const isHrTrend = prev.Close > sma400[i-1];
+                
+                if(time === "06:00:00" && isHrTrend) {
+                    const ds = dailySignals.get(date);
+                    // Check Day Filter (NQsma)
+                    const isDayAllowed = (params.NQsma === 0) || allowedDays.has(date);
+                    
+                    if(ds && isDayAllowed) {
+                        if(ds.s1) buySignal++;
+                        if(ds.s2) buySignal++;
+                        if(ds.s4) buySignal++;
+                    }
+                }
+
+                if(buySignal > 0) {
+                    const cost = params.F_unit * params.safetymargin;
+                    // Buy Logic
+                    for(let b=0; b<buySignal; b++) {
+                        if(record.money > (record.hold.length + 1) * cost) {
+                            record.hold.push(cur.Open);
+                            record.tradeCount++;
+                        }
+                    }
+                }
+
+                // --- Record Keeping ---
+                // Mark to Market
+                let floatPnl = 0;
+                if(record.hold.length > 0) {
+                    record.hold.forEach(entryP => {
+                        floatPnl += (cur.Close - entryP) * params.contract_value - 1.25;
+                    });
+                }
+                let equity = record.money + floatPnl;
+                
+                // Store daily or hourly? Storing hourly for chart smoothness, 
+                // but usually daily is enough. Let's do Daily Close to reduce array size for Plotly.
+                // Or simply every bar if performance allows. Let's do every bar for now.
+                // Optimization: Store only when date changes (Daily Close)
+                if(i === DF.length-1 || date !== DF[i+1]["Time"].split(" ")[0]) {
+                    record.history.time.push(date);
+                    record.history.equity.push(equity);
+                }
+            }
+            
+            return record;
+        }
+
+        // --- UI Interaction ---
+
+        let loadedData = { hDF: null, fDF: null, nqdDF: null };
+
+        const handleFile = (type, input) => {
+            const file = input.files[0];
+            if(!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = parseCSV(e.target.result);
+                if(data) {
+                    loadedData[type] = data;
+                    const zone = document.getElementById(`zone-${type}`);
+                    const status = document.getElementById(`${type}-status`);
+                    
+                    zone.classList.add('loaded');
+                    zone.querySelector('i').classList.replace('text-slate-400', 'text-emerald-500');
+                    status.textContent = `已載入 ${data.length.toLocaleString()} 筆數據`;
+                    status.classList.replace('text-slate-400', 'text-emerald-600');
+                    
+                    checkReady();
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        const checkReady = () => {
+            const btn = document.getElementById('run-backtest-btn');
+            if(loadedData.hDF && loadedData.fDF && loadedData.nqdDF) {
+                btn.disabled = false;
+            }
+        };
+
+        const getParams = () => ({
+            option_slope: parseInt(document.getElementById('option_slope').value),
+            OP_S_S: parseFloat(document.getElementById('OP_S_S').value),
+            OI_slope: parseInt(document.getElementById('OI_slope').value),
+            CS: document.getElementById('CS').value === "True",
+            CSL: parseInt(document.getElementById('CSL').value),
+            NQsma: parseInt(document.getElementById('NQsma').value),
+            stop_loss: parseFloat(document.getElementById('stop_loss').value),
+            high_stop_loss: parseFloat(document.getElementById('high_stop_loss').value),
+            downp: parseFloat(document.getElementById('downp').value),
+            money0: parseFloat(document.getElementById('money0').value),
+            F_unit: parseFloat(document.getElementById('F_unit').value),
+            safetymargin: parseFloat(document.getElementById('safetymargin').value),
+            contract_value: parseFloat(document.getElementById('contract_value').value)
+        });
+
+        document.getElementById('run-backtest-btn').addEventListener('click', () => {
+            const btn = document.getElementById('run-backtest-btn');
+            const overlay = document.getElementById('loading-overlay');
+            
+            btn.disabled = true;
+            overlay.style.display = 'flex';
+
+            // Allow UI to update before heavy calc
+            setTimeout(() => {
+                try {
+                    const params = getParams();
+                    const result = runBacktest(loadedData.hDF, loadedData.fDF, loadedData.nqdDF, params);
+                    
+                    displayResults(result, params.money0);
+                } catch (err) {
+                    console.error(err);
+                    document.getElementById('error-msg').textContent = "執行過程中發生錯誤: " + err.message;
+                    document.getElementById('error-modal').classList.remove('hidden');
+                } finally {
+                    btn.disabled = false;
+                    overlay.style.display = 'none';
+                }
+            }, 100);
+        });
+
+        function displayResults(record, initialMoney) {
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('stats-output').classList.remove('hidden');
+            document.getElementById('chart-output').classList.remove('hidden');
+            
+            const history = record.history;
+            const finalVal = history.equity[history.equity.length-1];
+            const ret = ((finalVal - initialMoney)/initialMoney * 100).toFixed(2);
+            
+            // Calc MDD
+            let peak = -Infinity;
+            let mdd = 0;
+            for(let v of history.equity) {
+                if(v > peak) peak = v;
+                let dd = (peak - v) / peak;
+                if(dd > mdd) mdd = dd;
+            }
+
+            // Update UI
+            const setVal = (id, val, colorClass) => {
+                const el = document.getElementById(id);
+                el.textContent = val;
+                if(colorClass) el.className = `stat-value ${colorClass}`;
+            };
+
+            setVal('stat-total-return', ret + '%', ret >= 0 ? 'text-theme-emerald' : 'text-theme-rose');
+            setVal('stat-final-value', Math.round(finalVal).toLocaleString(), '');
+            setVal('stat-max-drawdown', (mdd*100).toFixed(2) + '%', 'text-theme-rose');
+            setVal('stat-trade-count', record.tradeCount, '');
+
+            // Plotly
+            Plotly.purge('equity-chart');
+            const trace = {
+                x: history.time,
+                y: history.equity,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#3b82f6', width: 2 },
+                fill: 'tozeroy',
+                fillcolor: 'rgba(59, 130, 246, 0.05)'
+            };
+            
+            const layout = {
+                title: '帳戶權益曲線 (Daily Close)',
+                margin: { t: 40, r: 20, l: 60, b: 40 },
+                xaxis: { showgrid: false },
+                yaxis: { title: 'Equity (USD)', gridcolor: '#f1f5f9' },
+                hovermode: 'x unified'
+            };
+            
+            Plotly.newPlot('equity-chart', [trace], layout, { responsive: true });
+        }
+
+        // Event Listeners for File Inputs
+        ['hDF', 'fDF', 'nqdDF'].forEach(type => {
+            document.getElementById(`${type}-upload`).addEventListener('change', function() {
+                handleFile(type, this);
+            });
+        });
+
+    </script>
 </body>
 </html>
